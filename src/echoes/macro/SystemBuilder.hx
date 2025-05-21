@@ -661,7 +661,7 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 			for(arg in this.args) {
 				if(arg.type.followComplexType().match(macro:echoes.Entity)) {
 					//Iterate over all entities.
-					return macro for(entity in echoes.Echoes.activeEntities)
+					return macro for(entity in world.activeEntities)
 						${ call(macro entity, macro __dt__, macro world) };
 				}
 			}

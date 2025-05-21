@@ -51,7 +51,6 @@ using Lambda;
  * entity.add((entity:MyEntity));
  * ```
  */
-@:allow( echoes.Echoes )
 @:allow( echoes.World )
 abstract Entity( Int ) {
 

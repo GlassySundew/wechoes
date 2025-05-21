@@ -122,7 +122,6 @@ class System {
 		this.priority = priority != null ? priority : __getDefaultPriority__();
 	}
 	
-	@:allow(echoes.Echoes)
 	@:allow(echoes.World)
 	private function __activate__():Void {
 		if(!active) {
@@ -140,7 +139,6 @@ class System {
 		__children__.push(new ChildSystem(world, this, priority, runUpdateListeners));
 	}
 	
-	@:allow(echoes.Echoes)
 	@:allow(echoes.World)
 	private function __deactivate__():Void {
 		if(active) {
@@ -159,7 +157,6 @@ class System {
 		return 0;
 	}
 	
-	@:allow(echoes.Echoes)
 	@:allow(echoes.World)
 	private function __update__(dt:Float):Void {
 		__dt__ = dt;

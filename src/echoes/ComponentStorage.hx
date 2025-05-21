@@ -62,7 +62,6 @@ class ComponentStorage<T> {
 	/**
 	 * All components of this type.
 	 */
-	@:allow(echoes.Echoes)
 	@:allow(echoes.World)
 	#if (echoes_storage == "Map")
 	private final storage:Map<Int, T> = new Map();
@@ -130,7 +129,6 @@ class ComponentStorage<T> {
 		}
 	}
 	
-	@:allow(echoes.Echoes)
 	@:allow(echoes.World)
 	private inline function clear():Void {
 		#if (echoes_storage == "Map")
@@ -263,7 +261,6 @@ class ComponentStorage<T> {
 		unserializeFromData(Unserializer.run(data), world);
 	}
 	
-	@:allow(echoes.Echoes)
 	@:allow(echoes.World)
 	private function unserializeFromData(
 		data:#if (echoes_storage == "Map") Map<Int, T> #else Array<Null<T>> #end,
@@ -314,7 +311,6 @@ abstract EntityComponents(ComponentTypes) from ComponentTypes {
 	 * The source data for all `EntityComponents` lists. This should only be
 	 * updated by `ComponentStorage`, or by `Echoes.reset()`.
 	 */
-	@:allow(echoes.Echoes)
 	@:allow(echoes.World)
 	// private static final components:Array<EntityComponents> = [];
 	

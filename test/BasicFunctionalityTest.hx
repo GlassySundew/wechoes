@@ -246,7 +246,6 @@ class BasicFunctionalityTest extends Test {
 		assertTimesCalled(2, "AppearanceSystem.shapeRemoved");
 	}
 	
-	@:access(echoes.Echoes.lastUpdate)
 	private function testUpdateEvents():Void {
 		var world = new World();
 		

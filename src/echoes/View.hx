@@ -21,7 +21,6 @@ class ViewBase {
 	 */
 	public final componentStorage:ReadOnlyArray<DynamicComponentStorage>;
 	
-	@:allow(echoes.Echoes) 
 	@:allow(echoes.World) 
 	@:allow(echoes.ComponentStorage)
 	private final _entities:Array<Entity> = [];
@@ -101,7 +100,6 @@ class ViewBase {
 		}
 	}
 	
-	@:allow(echoes.Echoes) 
 	@:allow(echoes.World) 
 	private function reset():Void {
 		activations = 0;
