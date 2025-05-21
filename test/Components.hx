@@ -45,7 +45,8 @@ abstract VisualEntity(Entity) {
 	public var color:Color = DEFAULT_COLOR;
 	public var shape = Shape.CIRCLE;
 	
-	private inline function onTemplateApplied():Void {
-		shape = DEFAULT_SHAPE;
+	private inline function onTemplateApplied(world: echoes.World):Void {
+		trace('visual template sets default shape');
+		setShape(DEFAULT_SHAPE, world);
 	}
 }

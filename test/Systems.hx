@@ -9,7 +9,7 @@ import MethodCounter;
 using StringTools;
 
 class AppearanceSystem extends System implements IMethodCounter {
-	@:a private function colorAdded(color:Color):Void {}
+	@:a private function colorAdded(color:Color):Void {	}
 	@:u private function colorUpdated(color:Color):Void {}
 	@:r private function colorRemoved(color:Color):Void {}
 	
@@ -29,7 +29,7 @@ class GenericSystem<S:String, F:EitherType<Float, String>> extends System {
 	@:add private function onAdded(s:S, f:F, ?record:Array<S>, entity:Entity):Void {
 		if(record == null) {
 			this.record = record = new Array<S>();
-			entity.add(record);
+			entity.add(world, record);
 		}
 		
 		record.push(s.toLowerCase() + f);

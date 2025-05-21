@@ -5,6 +5,7 @@ package echoes.macro;
 import haxe.macro.Expr;
 import haxe.macro.Printer;
 import haxe.macro.Type;
+import echoes.World;
 
 using echoes.macro.MacroTools;
 using echoes.macro.ViewBuilder;
@@ -185,7 +186,7 @@ class SystemBuilder {
 			};
 			
 			//Get the inactive view for now.
-			expr.expr = Echoes.getInactiveView(params).expr;
+			expr.expr = World.getInactiveView(macro world, params).expr;
 			
 			final viewName:String = switch(expr.expr) {
 				case EField(_.expr => EConst(CIdent(name)), "instance"):
@@ -203,11 +204,33 @@ class SystemBuilder {
 		//Listener function priorities
 		//============================
 		
-		final knownPriorities:Map<String, Expr> = new Map();
-		
-		final updateListeners:Array<ListenerFunction> = fields.map(ListenerFunction.fromField.bind(_, UPDATE_META, knownPriorities)).filter(notNull);
-		final addListeners:Array<ListenerFunction> = fields.map(ListenerFunction.fromField.bind(_, ADD_META, knownPriorities)).filter(notNull);
-		final removeListeners:Array<ListenerFunction> = fields.map(ListenerFunction.fromField.bind(_, REMOVE_META, knownPriorities)).filter(notNull);
+		final knownPriorities : Map<String, Expr> = new Map();
+
+		final updateListeners : Array<ListenerFunction> = 
+		fields.map(
+			ListenerFunction.fromField.bind(
+				_,
+				UPDATE_META,
+				knownPriorities,
+				macro world
+			)
+		).filter( notNull );
+		final addListeners : Array<ListenerFunction> = fields.map(
+			ListenerFunction.fromField.bind(
+				_,
+				ADD_META,
+				knownPriorities,
+				macro world
+			)
+		).filter( notNull );
+		final removeListeners : Array<ListenerFunction> = fields.map(
+			ListenerFunction.fromField.bind(
+				_,
+				REMOVE_META,
+				knownPriorities,
+				macro world
+			)
+		).filter( notNull );
 		for(listener in addListeners.concat(removeListeners)) {
 			if(listener.wrapperFunction == null) {
 				Context.error("An @:add or @:remove listener must take at least one component. (Optional arguments don't count.)", listener.pos);
@@ -242,7 +265,7 @@ class SystemBuilder {
 		//===========
 		
 		final initializeChildren:Array<Expr> = [for(priority => listeners in fixedPriorityUpdateListeners) {
-			final body:Array<Expr> = [for(listener in listeners) listener.callDuringUpdate()];
+			final body:Array<Expr> = [for(listener in listeners) listener.callDuringUpdate(macro world)];
 			body.unshift(macro __dt__ = dt);
 			
 			macro __addListenersWithPriority__(${ knownPriorities[priority] }, function(dt:Float) $b{ body });
@@ -257,8 +280,8 @@ class SystemBuilder {
 			case null:
 				//No constructor found; declare a new one.
 				fields.push((macro class Constructor {
-					public inline function new(?priority:Int) {
-						super(priority);
+					public inline function new(world:echoes.World, ?priority:Int) {
+						super(world, priority);
 						
 						$b{ initializeChildren }
 					}
@@ -266,7 +289,7 @@ class SystemBuilder {
 			case _.getFunctionBody() => body if(body != null):
 				if(!body.exists(e -> e.expr.match(
 					ECall(_.expr => EConst(CIdent("super")), _)))) {
-						body.unshift(macro super());
+						body.push(macro super(world));
 				}
 				
 				for(expr in initializeChildren) {
@@ -311,24 +334,27 @@ class SystemBuilder {
 		final requiredFields:TypeDefinition = macro class RequiredFields {
 			private override function __activate__():Void {
 				if(!active) {
-					$b{ [for(view in linkedViews) macro $i{ view }.instance.activate()] }
+					$b{[for ( view in linkedViews ) {
+						macro {
+							world.getOrCreateView( $v{view}, $i{view} ).activate();
+					}}]}
 					
-					$b{ addListeners.map(listener -> macro ${ listener.view }.onAdded.push(${ listener.wrapper })) }
-					$b{ removeListeners.map(listener -> macro ${ listener.view }.onRemoved.push(${ listener.wrapper })) }
+					$b{ addListeners.map(listener -> macro cast ((cast (${ listener.view })).onAdded, echoes.utils.Signal<Dynamic>).push(${ listener.wrapper })) }
+					$b{ removeListeners.map(listener -> macro cast ((cast ${ listener.view }).onRemoved, echoes.utils.Signal<Dynamic>).push(${ listener.wrapper })) }
 					
 					super.__activate__();
 					
 					//If any entities already exist, call the `@:add` listeners.
-					$b{ addListeners.map(listener -> listener.callDuringUpdate()) }
+					$b{ addListeners.map(listener -> listener.callDuringUpdate(macro world)) }
 				};
 			}
 			
 			private override function __deactivate__():Void {
 				if(active) {
-					$b{ [for(view in linkedViews) macro $i{ view }.instance.deactivate()] }
+					$b{[for ( view in linkedViews ) macro world.getOrCreateView( $v{view}, $i{view} ).deactivate()]}
 					
-					$b{ addListeners.map(listener -> macro ${ listener.view }.onAdded.remove(${ listener.wrapper })) }
-					$b{ removeListeners.map(listener -> macro ${ listener.view }.onRemoved.remove(${ listener.wrapper })) }
+					$b{ addListeners.map(listener -> macro cast ((cast ${ listener.view }).onAdded, echoes.utils.Signal<Dynamic>).remove(${ listener.wrapper })) }
+					$b{ removeListeners.map(listener -> macro cast ((cast ${ listener.view }).onRemoved, echoes.utils.Signal<Dynamic>).remove(${ listener.wrapper })) }
 					
 					super.__deactivate__();
 				}
@@ -347,7 +373,7 @@ class SystemBuilder {
 				
 				$b{ {
 					[for(listener in updateListeners) if(listener.priority == null)
-						listener.callDuringUpdate()];
+						listener.callDuringUpdate(macro world)];
 				} }
 				
 				/* ${ {
@@ -436,6 +462,7 @@ class SystemBuilder {
 	args:Array<FunctionArg>,
 	pos:Position,
 	priority:Null<String>,
+	world:ExprOf<World>,
 	?components:Array<ComplexType>,
 	?optionalComponents:Array<ComplexType>,
 	?viewName:String,
@@ -444,7 +471,12 @@ class SystemBuilder {
 
 @:forward
 abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
-	public static function fromField(field:Field, listenerType:String, knownPriorities:Map<String, Expr>):ListenerFunction {
+	public static function fromField(
+		field:Field, 
+		listenerType:String, 
+		knownPriorities:Map<String, Expr>,
+		world : ExprOf<World>
+	):ListenerFunction {
 		switch(field.kind) {
 			case FFun(func):
 				if(SystemBuilder.getMeta(field.meta, listenerType) == null) {
@@ -468,7 +500,8 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 					name: field.name,
 					args: func.args,
 					pos: field.pos,
-					priority: SystemBuilder.getPriority(field.meta, knownPriorities)
+					priority: SystemBuilder.getPriority(field.meta, knownPriorities),
+					world : world
 				};
 			default:
 				return null;
@@ -520,7 +553,7 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 	
 	public var view(get, never):Expr;
 	private inline function get_view():Expr {
-		return macro $i{ viewName }.instance;
+		return macro world.getOrCreateView($v{ viewName }, $i{viewName});
 	}
 	
 	public var viewName(get, never):String;
@@ -574,7 +607,7 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 				kind: FFun({
 					args: args,
 					ret: macro:Void,
-					expr: call(macro entity, macro __dt__)
+					expr: call(macro entity, macro __dt__, macro world)
 				}),
 				pos: this.pos
 			};
@@ -588,7 +621,7 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 	 * `entity`, and any required components, so it's important to ensure all of
 	 * these values are available in the current context.
 	 */
-	private function call(getEntity:Expr, getDeltaTime:Expr):Expr {
+	private function call(getEntity:Expr, getDeltaTime:Expr, worldExpr: ExprOf<World>):Expr {
 		final args:Array<Expr> = [for(arg in this.args) {
 			switch(arg.type.followComplexType()) {
 				case macro:StdTypes.Float:
@@ -602,7 +635,7 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 					if(arg.opt || arg.value != null) {
 						//Look up the optional component's value. (May be null
 						//and that's fine.)
-						EntityTools.get(getEntity, arg.type.followComplexType());
+						EntityTools.get(getEntity, worldExpr, arg.type.followComplexType());
 					} else {
 						//Defined as one of the wrapper function's arguments.
 						macro $i{ arg.name };
@@ -616,12 +649,12 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 	/**
 	 * Calls this listener one or more times as part of an `@:update` step.
 	 */
-	public function callDuringUpdate():Expr {
+	public function callDuringUpdate(world : ExprOf<World>):Expr {
 		if(components.length > 0) {
-			return ViewBuilder.forEachEntityInView(macro @:pos(this.pos) $i{ this.name }, this.args, macro __dt__);
+			return ViewBuilder.forEachEntityInView(macro @:pos(this.pos) $i{ this.name }, this.args, macro __dt__, macro world);
 		} else if(optionalComponents.length > 0) {
-			return macro for(entity in echoes.Echoes.activeEntities)
-				${ call(macro entity, macro __dt__) };
+			return macro for(entity in world.activeEntities)
+				${ call(macro entity, macro __dt__, macro world) };
 		} else {
 			//No components to filter by, but there may still be an `Entity`
 			//argument. (And/or a `Float` argument, which isn't relevant.)
@@ -629,12 +662,16 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 				if(arg.type.followComplexType().match(macro:echoes.Entity)) {
 					//Iterate over all entities.
 					return macro for(entity in echoes.Echoes.activeEntities)
-						${ call(macro entity, macro __dt__) };
+						${ call(macro entity, macro __dt__, macro world) };
 				}
 			}
 			
-			//Don't iterate over anything.
-			return call(macro throw "Unable to select an entity because this function has no required components", macro __dt__);
+			// Don't iterate over anything.
+			return call(
+				macro throw "Unable to select an entity because this function has no required components",
+				macro __dt__,
+				macro world
+			);
 		}
 	}
 }

@@ -13,7 +13,7 @@ using echoes.macro.MacroTools;
  * `assertTimesCalled()`.
  */
 class MethodCounter {
-	private static final counts:Map<String, Int> = new Map();
+	public static final counts:Map<String, Int> = new Map();
 	
 	/**
 	 * Resets all counters.

@@ -5,10 +5,14 @@ package echoes.macro;
 import haxe.macro.Expr;
 import haxe.macro.Type;
 
-using echoes.macro.ComponentStorageBuilder;
-using echoes.macro.MacroTools;
-using haxe.macro.ComplexTypeTools;
-using haxe.macro.Context;
+import echoes.macro.ComponentStorageBuilder;
+import echoes.macro.MacroTools;
+import haxe.macro.ComplexTypeTools;
+import haxe.macro.Context;
+// using echoes.macro.ComponentStorageBuilder;
+// using echoes.macro.MacroTools;
+// using haxe.macro.ComplexTypeTools;
+// using haxe.macro.Context;
 
 /**
  * Entity manipulation functions. Mostly equivalent to the macros found in
@@ -25,12 +29,12 @@ class EntityTools {
 	 * If a component is replaced and its type is tagged `@:echoes_replace`,
 	 * this will dispatch a `@:remove` event before dispatching `@:add`.
 	 */
-	public static function add(self:Expr, components:Array<Expr>):ExprOf<echoes.Entity> {
-		return macro @:pos(Context.currentPos()) {
+	public static function add(self:Expr, world:ExprOf<World>, components:Array<Expr>):ExprOf<echoes.Entity> {
+		return macro @:pos( Context.currentPos() ) {
 			final __entity__:echoes.Entity = $self;
 			
 			$b{ [for(component in components) {
-				final type:Type = component.parseComponentType();
+				final type:Type = MacroTools.parseComponentType(component);
 				
 				final operation:String = switch(type) {
 					case TEnum(_.get().meta => m, _),
@@ -43,8 +47,8 @@ class EntityTools {
 						"add";
 				};
 				
-				final storage:Expr = type.toComplexType().getComponentStorage();
-				macro $storage.$operation(__entity__, $component);
+				final storage:Expr = ComponentStorageBuilder.getComponentStorage(world, Context.toComplexType(type));
+				macro $storage.$operation(__entity__, $component, world);
 			}] }
 			
 			__entity__;
@@ -62,15 +66,15 @@ class EntityTools {
 	 * @param components Components of `Any` type.
 	 * @return The entity.
 	 */
-	public static function addIfMissing(self:Expr, components:Array<Expr>):ExprOf<echoes.Entity> {
-		return macro @:pos(Context.currentPos()) {
+	public static function addIfMissing(self:Expr, world : ExprOf<World>, components:Array<Expr>):ExprOf<echoes.Entity> {
+		return macro /* @:pos(Context.currentPos()) */ {
 			final __entity__:echoes.Entity = $self;
 			
 			$b{ [for(component in components) {
-				final type:Type = component.parseComponentType();
+				final type:Type = MacroTools.parseComponentType(component);
 				
-				final storage:Expr = type.toComplexType().getComponentStorage();
-				macro if(!$storage.exists(__entity__)) $storage.add(__entity__, $component);
+				final storage:Expr = ComponentStorageBuilder.getComponentStorage(world, Context.toComplexType(type));
+				macro if(!$storage.exists(__entity__)) $storage.add(__entity__, $component, world);
 			}] }
 			
 			__entity__;
@@ -83,13 +87,13 @@ class EntityTools {
 	 * components themselves!
 	 * @return The entity.
 	 */
-	public static function remove(self:Expr, types:Array<ComplexType>):ExprOf<echoes.Entity> {
+	public static function remove(self:Expr, world : ExprOf<World>, types:Array<ComplexType>):ExprOf<echoes.Entity> {
 		return macro @:pos(Context.currentPos()) {
 			final __entity__:echoes.Entity = $self;
 			
 			$b{ [for(type in types) {
-				final storage:Expr = type.getComponentStorage();
-				macro $storage.remove(__entity__);
+				final storage:Expr = ComponentStorageBuilder.getComponentStorage(world, type);
+				macro $storage.remove(__entity__, world);
 			}] }
 			
 			__entity__;
@@ -102,8 +106,8 @@ class EntityTools {
 	 * @param type The type of the component to get.
 	 * @return The component, or `null` if the entity doesn't have it.
 	 */
-	public static function get<T>(self:Expr, complexType:ComplexType):ExprOf<T> {
-		final storage:Expr = complexType.getComponentStorage();
+	public static function get<T>(self:Expr, world : ExprOf<World>, complexType:ComplexType):ExprOf<T> {
+		final storage:Expr = ComponentStorageBuilder.getComponentStorage(world, complexType);
 		return macro @:pos(Context.currentPos()) $storage.get($self);
 	}
 	
@@ -111,8 +115,8 @@ class EntityTools {
 	 * Returns whether the entity has a component of the given type.
 	 * @param type The type to check for.
 	 */
-	public static function exists(self:Expr, complexType:ComplexType):ExprOf<Bool> {
-		final storage:Expr = complexType.getComponentStorage();
+	public static function exists(self:Expr, world:ExprOf<World>, complexType:ComplexType):ExprOf<Bool> {
+		final storage:Expr = ComponentStorageBuilder.getComponentStorage(world, complexType);
 		return macro @:pos(Context.currentPos()) $storage.exists($self);
 	}
 }

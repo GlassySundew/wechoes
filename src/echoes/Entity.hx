@@ -1,10 +1,11 @@
 package echoes;
 
 import echoes.ComponentStorage;
-
 #if macro
 import echoes.macro.EntityTools;
 import haxe.macro.Expr;
+import haxe.macro.Context;
+import haxe.macro.Type;
 
 using echoes.macro.ComponentStorageBuilder;
 using echoes.macro.MacroTools;
@@ -50,75 +51,49 @@ using Lambda;
  * entity.add((entity:MyEntity));
  * ```
  */
-@:allow(echoes.Echoes)
-abstract Entity(Int) {
-	/**
-	 * The next entity ID that will be allocated, if `idPool` is empty.
-	 */
-	private static var nextId:Int = 0;
-	
-	/**
-	 * A destroyed entity's ID will go in this pool, and will then be reassigned
-	 * to the next entity to be created.
-	 */
-	private static final idPool:Array<Int> = [];
-	
-	/**
-	 * Whether this entity is active. If false, it may also be destroyed.
-	 */
-	public var active(get, never):Bool;
-	private inline function get_active():Bool {
-		return Echoes.activeEntityIndices[this] != null;
-	}
-	
-	/**
-	 * Whether this entity has been destroyed.
-	 */
-	public var destroyed(get, never):Bool;
-	private inline function get_destroyed():Bool {
-		//In most cases it's faster to check `active` than `idPool`.
-		return !active && idPool.contains(this);
-	}
-	
+@:allow( echoes.Echoes )
+@:allow( echoes.World )
+abstract Entity( Int ) {
+
 	/**
 	 * This entity's unique integer ID. Used internally.
 	 */
-	public var id(get, never):Int;
-	private inline function get_id():Int {
+	public var id( get, never ) : Int;
+	private inline function get_id() : Int {
 		return this;
 	}
-	
+
 	/**
 	 * @param active Whether to activate this entity immediately. Otherwise,
 	 * you'll have to call `activate()`.
 	 */
-	public inline function new(?active:Bool = true) {
-		final id:Null<Int> = idPool.pop();
-		
-		this = id != null ? id : nextId++;
-		
-		if(active) {
-			Echoes.activeEntityIndices[this] = Echoes._activeEntities.length;
-			Echoes._activeEntities.push(cast this);
+	public inline function new( world : World, ?active : Bool = true ) {
+		final id : Null<Int> = world.entityIdPool.pop();
+
+		this = id != null ? id : world.nextEntityId++;
+
+		if ( active ) {
+			world.activeEntityIndices[this] = world._activeEntities.length;
+			world._activeEntities.push( cast this );
 		}
 	}
-	
+
 	/**
 	 * Registers this entity so it can be found in views and updated by systems.
 	 */
-	public function activate():Void {
-		if(!active) {
-			Echoes.activeEntityIndices[this] = Echoes._activeEntities.length;
-			Echoes._activeEntities.push(cast this);
-			
-			for(storage in getComponents()) {
-				for(view in storage.relatedViews) {
-					view.add(cast this);
+	public function activate( world : World ) : Void {
+		if ( !isActive( world ) ) {
+			world.activeEntityIndices[this] = world._activeEntities.length;
+			world._activeEntities.push( cast this );
+
+			for ( storage in getComponents( world ) ) {
+				for ( view in storage.relatedViews ) {
+					view.add( cast this );
 				}
 			}
 		}
 	}
-	
+
 	/**
 	 * Adds one or more components to the entity, dispatching an `@:add` event
 	 * for each one. If the entity already has a component of the same type, the
@@ -127,10 +102,13 @@ abstract Entity(Int) {
 	 * If a component is replaced and its type is tagged `@:echoes_replace`,
 	 * this will dispatch a `@:remove` event before dispatching `@:add`.
 	 */
-	public macro function add(self:Expr, components:Array<Expr>):ExprOf<echoes.Entity> {
-		return EntityTools.add(self, components);
+	public macro function add( ethis : Expr, world : ExprOf<World>, components : Array<Expr> ) : ExprOf<echoes.Entity> {
+		// Macro-time type check for 'world' argument
+		MacroTools.checkWorld(world);
+		return EntityTools.add( ethis, world, components );
 	}
-	
+
+
 	/**
 	 * Adds one or more components to the entity, but only if those components
 	 * don't already exist. If the entity already has a component of the same
@@ -142,10 +120,15 @@ abstract Entity(Int) {
 	 * @param components Components of `Any` type.
 	 * @return This entity.
 	 */
-	public macro function addIfMissing(self:Expr, components:Array<Expr>):ExprOf<echoes.Entity> {
-		return EntityTools.addIfMissing(self, components);
+	public macro function addIfMissing(
+		self : Expr,
+		world : ExprOf<World>,
+		components : Array<Expr>
+	) : ExprOf<echoes.Entity> {
+		MacroTools.checkWorld(world);
+		return EntityTools.addIfMissing( self, world, components );
 	}
-	
+
 	/**
 	 * Removes this entity from all views and systems, but saves all associated
 	 * components. Call `activate()` to restore it.
@@ -153,58 +136,72 @@ abstract Entity(Int) {
 	 * Note: this will trigger `@:remove` events for all of the entity's
 	 * components, even though the components aren't removed.
 	 */
-	public function deactivate():Void {
-		if(active) {
-			final index:Int = Echoes.activeEntityIndices[this];
-			if(index >= 0) {
-				Echoes.activeEntityIndices[this] = null;
-				
-				#if echoes_stable_order
-				//Do the equivalent of `_activeEntities.remove(this)`, but also
-				//save each entity's new index.
-				for(i in index...(Echoes.activeEntities.length - 1)) {
-					final entity:Entity = Echoes.activeEntities[i + 1];
-					Echoes.activeEntityIndices[entity.id] = i;
-					Echoes._activeEntities[i] = entity;
+	public function deactivate( world : World ) : Void {
+		if ( isActive( world ) ) {
+			final index : Int = world.activeEntityIndices[this];
+			if ( index >= 0 ) {
+				world.activeEntityIndices[this] = null;
+
+				#if world_stable_order
+				// Do the equivalent of `_activeEntities.remove(this)`, but also
+				// save each entity's new index.
+				for ( i in index...( world.activeEntities.length - 1 ) ) {
+					final entity : Entity = world.activeEntities[i + 1];
+					world.activeEntityIndices[entity.id] = i;
+					world._activeEntities[i] = entity;
 				}
-				Echoes._activeEntities.pop();
+				world._activeEntities.pop();
 				#else
-				//Instead of removing this from the middle of the array in O(n),
-				//move the final entity to `index` in O(1).
-				final lastEntity:Entity = Echoes._activeEntities.pop();
-				if(lastEntity.id != this) {
-					Echoes.activeEntityIndices[lastEntity.id] = index;
-					Echoes._activeEntities[index] = lastEntity;
+				// Instead of removing this from the middle of the array in O(n),
+				// move the final entity to `index` in O(1).
+				final lastEntity : Entity = world._activeEntities.pop();
+				if ( lastEntity.id != this ) {
+					world.activeEntityIndices[lastEntity.id] = index;
+					world._activeEntities[index] = lastEntity;
 				}
 				#end
 			}
-			
-			for(storage in getComponents()) {
-				for(view in storage.relatedViews) {
-					view.remove(cast this);
+
+			for ( storage in getComponents( world ) ) {
+				for ( view in storage.relatedViews ) {
+					view.remove( cast this );
 				}
 			}
 		}
 	}
-	
+
+	/**
+	 * Whether this entity has been destroyed.
+	 */
+	public function isDestroyed( world : World ) : Bool {
+		return !isActive( world ) && world.entityIdPool.contains( this );
+	}
+
+	/**
+	 * Whether this entity is active. If false, it may also be destroyed.
+	 */
+	public function isActive( world : World ) {
+		return world.activeEntityIndices[this] != null;
+	}
+
 	/**
 	 * Removes all of this entity's components, deactivates it, and frees its id
 	 * for reuse. Don't save any references to this entity afterwards.
 	 */
-	public function destroy():Void {
-		if(!destroyed) {
-			removeAll();
-			deactivate();
-			idPool.push(this);
+	public function destroy( world : World ) : Void {
+		if ( !isDestroyed( world ) ) {
+			removeAll( world );
+			deactivate( world );
+			world.entityIdPool.push( this );
 		}
 	}
-	
+
 	/**
 	 * Returns whether the entity has a component of the given type.
 	 * @param type The type to check for.
 	 */
-	public macro function exists(self:Expr, type:ExprOf<Class<Any>>):ExprOf<Bool> {
-		return EntityTools.exists(self, type.parseClassExpr(true));
+	public macro function exists( self : Expr, world : ExprOf<World>, type : ExprOf<Class<Any>> ) : ExprOf<Bool> {
+		return EntityTools.exists( self, world, type.parseClassExpr( true ) );
 	}
 	
 	/**
@@ -213,36 +210,37 @@ abstract Entity(Int) {
 	 * @param type The type of the component to get.
 	 * @return The component, or `null` if the entity doesn't have it.
 	 */
-	public macro function get<T>(self:Expr, type:ExprOf<Class<T>>):ExprOf<T> {
-		return EntityTools.get(self, type.parseClassExpr(true));
+	public macro function get<T>( self : Expr, world : ExprOf<World>, type : ExprOf<Class<T>> ) : ExprOf<T> {
+		return EntityTools.get( self, world, type.parseClassExpr( true ) );
 	}
-	
+
 	/**
 	 * Finds all the `ComponentStorage` instances currently storing information
 	 * about this entity. This is roughly equivalent to a list of components.
 	 * @see `get()` for a faster way to look up individual components.
 	 */
-	public inline function getComponents():EntityComponents {
-		return EntityComponents.forEntity(cast this);
+	public inline function getComponents( world : World ) : EntityComponents {
+		return EntityComponents.forEntity( cast this, world );
 	}
-	
+
 	/**
 	 * Removes one or more components from the entity.
 	 * @param types The type(s) of the components to remove. _Not_ the
 	 * components themselves!
 	 * @return This entity.
 	 */
-	public macro function remove(self:Expr, types:Array<ExprOf<Class<Any>>>):ExprOf<echoes.Entity> {
-		return EntityTools.remove(self, [for(type in types) type.parseClassExpr(true)]);
+	public macro function remove( self : Expr, world : ExprOf<World>, types : Array<ExprOf<Class<Any>>> ) : ExprOf<echoes.Entity> {
+		MacroTools.checkWorld(world);
+		return EntityTools.remove( self, world, [for ( type in types ) type.parseClassExpr( true )] );
 	}
-	
+
 	/**
 	 * Removes all of this entity's components, but does not deactivate or
 	 * destroy it. Caution: if a `@:remove` listener adds a component to the
 	 * entity, that component may remain afterwards.
 	 */
-	public inline function removeAll():Void {
-		EntityComponents.removeAll(cast this);
+	public inline function removeAll( world : World ) : Void {
+		EntityComponents.removeAll( cast this, world );
 	}
 }
 
@@ -347,6 +345,6 @@ abstract Entity(Int) {
  * }
  * ```
  */
-macro function build():Array<Field> {
+macro function build() : Array<Field> {
 	return echoes.macro.EntityTemplateBuilder.build();
 }

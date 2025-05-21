@@ -7,11 +7,17 @@ import haxe.macro.Expr;
 import haxe.macro.Printer;
 import haxe.macro.Type;
 
-using echoes.macro.ComponentStorageBuilder;
-using echoes.macro.MacroTools;
-using haxe.macro.ComplexTypeTools;
-using haxe.macro.Context;
-using Lambda;
+import echoes.macro.ComponentStorageBuilder;
+import echoes.macro.MacroTools;
+import haxe.macro.ComplexTypeTools;
+import haxe.macro.Context;
+import Lambda;
+
+// using echoes.macro.ComponentStorageBuilder;
+// using echoes.macro.MacroTools;
+// using haxe.macro.ComplexTypeTools;
+// using haxe.macro.Context;
+// using Lambda;
 
 class ViewBuilder {
 	private static final viewCache:Map<String, { cls:ComplexType, components:Array<ComplexType>, type:Type }> = new Map();
@@ -66,7 +72,7 @@ class ViewBuilder {
 	}
 	
 	private static function joinNames(types:Array<ComplexType>, ?qualify:Bool = true):String {
-		final typeNames:Array<String> = [for(type in types) type.toIdentifier(qualify)];
+		final typeNames:Array<String> = [for(type in types) MacroTools.toIdentifier(type, qualify)];
 		typeNames.sort(MacroTools.compareStrings);
 		return typeNames.join("_");
 	}
@@ -75,7 +81,7 @@ class ViewBuilder {
 		switch(Context.getLocalType()) {
 			case TInst(_, types) if(types != null && types.length > 0):
 				return createViewType([for(type in types)
-					type.followMono().toComplexType()]);
+					Context.toComplexType(MacroTools.followMono(type))]);
 			default:
 				Context.error("Expected one or more type parameters.", Context.currentPos());
 				return null;
@@ -83,6 +89,7 @@ class ViewBuilder {
 	}
 	
 	public static function createViewType(components:Array<ComplexType>):Type {
+		// for ( comp in components ) trace( util.Macros.formatExpr( comp ) );
 		final viewClassName:String = getViewName(components);
 		
 		if(viewCache.exists(viewClassName)) {
@@ -119,7 +126,7 @@ class ViewBuilder {
 		 * ```
 		 */
 		final callbackArgs:Array<Expr> = [for(component in components)
-			macro ${ component.getComponentStorage() }.get(entity)];
+			macro ${ComponentStorageBuilder.getComponentStorage(macro world, component)}.get(entity)];
 		
 		/**
 		 * The arguments required to dispatch a remove event. Unlike with
@@ -142,7 +149,7 @@ class ViewBuilder {
 		 * run the loop for 0-1 iterations.
 		 */
 		final removedCallbackArgs:Array<Expr> = [for(component in components) {
-			final inst:Expr = macro ${ component.getComponentStorage() };
+			final inst:Expr = macro ${ComponentStorageBuilder.getComponentStorage(macro world, component)};
 			macro $inst == removedComponentStorage ? removedComponent : $inst.get(entity);
 		}];
 		
@@ -150,14 +157,25 @@ class ViewBuilder {
 		callbackArgs.unshift(macro entity);
 		removedCallbackArgs.unshift(macro entity);
 		
+		// trace(viewTypePath);
+		
 		final def:TypeDefinition = macro class $viewClassName extends echoes.View.ViewBase {
-			public static final instance:$viewComplexType = new $viewTypePath();
+			// public static final instance:$viewComplexType = new $viewTypePath();
 			
 			public final onAdded = new echoes.utils.Signal<$callbackType>();
 			public final onRemoved = new echoes.utils.Signal<$callbackType>();
-			
-			private function new() {
-				super([$a{ { [for(component in components) macro ${ component.getComponentStorage() }]; } }]);
+
+			private function new(world : echoes.World) {
+				world.addView($v{viewClassName}, this);
+
+				super(
+					world,
+					$a{{
+						[for ( component in components )
+							macro ${ ComponentStorageBuilder.getComponentStorage( macro world, component ) }
+						];
+					}}
+				);
 			}
 			
 			private override function dispatchAddedCallback(entity:echoes.Entity):Void {
@@ -204,14 +222,14 @@ class ViewBuilder {
 					final args = [for(i => component in components)
 						{ name: "component" + i, type: component }];
 					args.unshift({ name: "entity", type: macro:echoes.Entity });
-					forEachEntityInView(macro callback, args, macro 0);
+					forEachEntityInView(macro callback, args, macro 0, macro world);
 				} }
 			}
 		}
 		
 		Context.defineType(def);
 		
-		final viewType:Type = viewComplexType.toType();
+		final viewType:Type = ComplexTypeTools.toType(viewComplexType);
 		viewCache.set(viewClassName, { cls: viewComplexType, components: components, type: viewType });
 		
 		Report.viewNames.push(viewClassName);
@@ -219,10 +237,10 @@ class ViewBuilder {
 		return viewType;
 	}
 	
-	public static function forEachEntityInView(func:Expr, args:Array<FunctionArg>, getDeltaTime:Expr):Expr {
+	public static function forEachEntityInView(func:Expr, args:Array<FunctionArg>, getDeltaTime:Expr, worldExpr:ExprOf<World>):Expr {
 		final requiredComponents:Array<ComplexType> = [];
 		final funcArgs:Array<Expr> = [for(arg in args) {
-			switch(arg.type.followComplexType()) {
+			switch(MacroTools.followComplexType(arg.type)) {
 				case macro:StdTypes.Float:
 					getDeltaTime;
 				case macro:echoes.Entity:
@@ -231,13 +249,15 @@ class ViewBuilder {
 					if(!arg.opt && arg.value == null) {
 						requiredComponents.push(x);
 					}
-					macro ${ x.getComponentStorage() }.get(entity);
+					macro ${ComponentStorageBuilder.getComponentStorage(macro world, x)}.get(entity);
 			}
 		}];
 		
+		var viewName= getViewName(requiredComponents);
+		
 		return macro {
 			var i:Int = 0;
-			final entities:haxe.ds.ReadOnlyArray<echoes.Entity> = $i{ getViewName(requiredComponents) }.instance.entities;
+			final entities:haxe.ds.ReadOnlyArray<echoes.Entity> = world.getOrCreateView($v{viewName}, $i{viewName}).entities;
 			while(i < entities.length) {
 				final entity:echoes.Entity = entities[i];
 				$func($a{ funcArgs });

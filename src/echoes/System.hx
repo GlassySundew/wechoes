@@ -1,6 +1,7 @@
 package echoes;
 
-import echoes.Echoes;
+import echoes.World.SystemDetails;
+
 import echoes.macro.ViewBuilder;
 import echoes.utils.Signal;
 import echoes.View;
@@ -84,6 +85,8 @@ class System {
 	 * The list directly containing this system, if any.
 	 */
 	public var parent(default, null):SystemList;
+
+	final world : World;
 	
 	/**
 	 * This system's base priority, applying to any listener function that
@@ -114,11 +117,13 @@ class System {
 	 * @param priority This system's initial priority. If omitted, this will
 	 * default to the value set by `@:priority`, or 0 if that's omitted too.
 	 */
-	private inline function new(?priority:Int) {
+	private inline function new(world : World, ?priority:Int) {
+		this.world = world;
 		this.priority = priority != null ? priority : __getDefaultPriority__();
 	}
 	
 	@:allow(echoes.Echoes)
+	@:allow(echoes.World)
 	private function __activate__():Void {
 		if(!active) {
 			active = true;
@@ -132,10 +137,11 @@ class System {
 	
 	@:noCompletion
 	private inline function __addListenersWithPriority__(priority:Int, runUpdateListeners:(Float) -> Void):Void {
-		__children__.push(new ChildSystem(this, priority, runUpdateListeners));
+		__children__.push(new ChildSystem(world, this, priority, runUpdateListeners));
 	}
 	
 	@:allow(echoes.Echoes)
+	@:allow(echoes.World)
 	private function __deactivate__():Void {
 		if(active) {
 			active = false;
@@ -154,6 +160,7 @@ class System {
 	}
 	
 	@:allow(echoes.Echoes)
+	@:allow(echoes.World)
 	private function __update__(dt:Float):Void {
 		__dt__ = dt;
 		
@@ -166,7 +173,7 @@ class System {
 	 * Note: you can also activate this by adding it to an active `SystemList`.
 	 */
 	public inline function activate():Void {
-		Echoes.activeSystems.add(this);
+		world.activeSystems.add(this);
 	}
 	
 	/**
@@ -198,7 +205,7 @@ class System {
 	 * Returns a view that will activate and deactivate when the system does.
 	 */
 	public macro function getLinkedView(self:Expr, componentTypes:Array<ExprOf<Class<Any>>>):Expr {
-		final view:Expr = Echoes.getInactiveView(componentTypes);
+		final view:Expr = World.getInactiveView(macro world, componentTypes);
 		return macro {
 			final self = $self;
 			self.onActivate.push($view.activate);
@@ -218,8 +225,13 @@ private class ChildSystem extends System {
 	
 	private final runUpdateListeners:(Float) -> Void;
 	
-	public inline function new(parentSystem:System, priority:Int, runUpdateListeners:(Float) -> Void) {
-		super(priority);
+	public inline function new(
+		world:World,
+		parentSystem:System, 
+		priority:Int, 
+		runUpdateListeners:(Float) -> Void
+	) {
+		super(world, priority);
 		
 		this.parentSystem = parentSystem;
 		this.runUpdateListeners = runUpdateListeners;

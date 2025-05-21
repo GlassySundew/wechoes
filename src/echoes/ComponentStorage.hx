@@ -1,6 +1,5 @@
 package echoes;
 
-import echoes.Echoes;
 import echoes.Entity;
 import echoes.utils.ComponentTypes;
 import echoes.utils.ReadOnlyData;
@@ -64,15 +63,16 @@ class ComponentStorage<T> {
 	 * All components of this type.
 	 */
 	@:allow(echoes.Echoes)
+	@:allow(echoes.World)
 	#if (echoes_storage == "Map")
 	private final storage:Map<Int, T> = new Map();
 	#else
 	private final storage:Array<Null<T>> = [];
 	#end
 	
-	public inline function new(componentType:String) {
+	public inline function new(world : World, componentType:String, storageName: String) {
 		this.componentType = componentType;
-		Echoes._componentStorage.push(this);
+		world.addStorage(storageName, this);
 		
 		//Some platforms get confused by the declaration of `Array<Null<T>>`,
 		//and treat that as something like `Array<Dynamic>`, and then cast to
@@ -85,9 +85,9 @@ class ComponentStorage<T> {
 		#end
 	}
 	
-	public function add(entity:Entity, component:Null<T>):Void {
+	public function add(entity:Entity, component:Null<T>, world : World):Void {
 		if(component == null) {
-			remove(entity);
+			remove(entity, world);
 			return;
 		}
 		
@@ -101,13 +101,13 @@ class ComponentStorage<T> {
 		
 		storage[entity.id] = component;
 		
-		var components:EntityComponents = EntityComponents.components[entity.id];
+		var components:EntityComponents = world.components[entity.id];
 		if(components == null) {
-			EntityComponents.components[entity.id] = components = new EntityComponents();
+			world.components[entity.id] = components = new EntityComponents();
 		}
 		components.addComponentStorage(this);
 		
-		if(entity.active) {
+		if(entity.isActive(world)) {
 			var exception:Exception = null;
 			for(view in relatedViews) {
 				try {
@@ -131,6 +131,7 @@ class ComponentStorage<T> {
 	}
 	
 	@:allow(echoes.Echoes)
+	@:allow(echoes.World)
 	private inline function clear():Void {
 		#if (echoes_storage == "Map")
 		storage.clear();
@@ -159,7 +160,7 @@ class ComponentStorage<T> {
 		return storage[entity.id];
 	}
 	
-	public function remove(entity:Entity):Void {
+	public function remove(entity:Entity, world : World):Void {
 		final removedComponent:Null<T> = get(entity);
 		
 		#if (echoes_storage == "Map")
@@ -169,9 +170,9 @@ class ComponentStorage<T> {
 		#end
 		
 		if(removedComponent != null) {
-			EntityComponents.components[entity.id].removeComponentStorage(this);
+			world.components[entity.id].removeComponentStorage(this);
 			
-			if(entity.active) {
+			if(entity.isActive(world)) {
 				ongoingRemovals.push(entity.id);
 				
 				var exception:Exception = null;
@@ -197,10 +198,10 @@ class ComponentStorage<T> {
 	/**
 	 * Removes all components of this type from all entities.
 	 */
-	public inline function removeAll():Void {
+	public inline function removeAll(world : World):Void {
 		for(entity => component in storage) {
 			if(component != null) {
-				remove(cast entity);
+				remove(cast entity, world);
 			}
 		}
 	}
@@ -209,11 +210,11 @@ class ComponentStorage<T> {
 	 * Dispatches a `@:remove` event (if applicable) before adding `component`.
 	 * To use this for a given component, tag the type with `@:echoes_replace`.
 	 */
-	public function replace(entity:Entity, component:Null<T>):Void {
+	public function replace(entity:Entity, component:Null<T>, world : World):Void {
 		if(get(entity) != component) {
 			var exception:Exception = null;
 			try {
-				remove(entity);
+				remove(entity, world);
 			} catch(e:Exception) {
 				if(exception == null) {
 					exception = e;
@@ -221,7 +222,7 @@ class ComponentStorage<T> {
 			}
 			
 			try {
-				add(entity, component);
+				add(entity, component, world);
 			} catch(e:Exception) {
 				if(exception == null) {
 					exception = e;
@@ -256,19 +257,23 @@ class ComponentStorage<T> {
 	 * `Float`, can cause errors on some targets.
 	 * @see `Echoes.unserialize()` to restore all components at once.
 	 */
-	public function unserialize(data:String):Void {
-		removeAll();
+	public function unserialize(data:String, world: World):Void {
+		removeAll(world);
 		
-		unserializeFromData(Unserializer.run(data));
+		unserializeFromData(Unserializer.run(data), world);
 	}
 	
 	@:allow(echoes.Echoes)
-	private function unserializeFromData(data:#if (echoes_storage == "Map") Map<Int, T> #else Array<Null<T>> #end) {
+	@:allow(echoes.World)
+	private function unserializeFromData(
+		data:#if (echoes_storage == "Map") Map<Int, T> #else Array<Null<T>> #end,
+		world : World
+	) {
 		clear();
 		
 		if(data != null) {
 			for(entity => component in data) {
-				add(cast entity, component);
+				add(cast entity, component, world);
 			}
 		}
 	}
@@ -285,7 +290,7 @@ class ComponentStorage<T> {
  * type checking will be performed.
  */
 @:forward(clear, componentType, exists, get, name, relatedViews, remove, removeAll, shortComponentType)
-abstract DynamicComponentStorage(ComponentStorage<Dynamic>) {
+abstract DynamicComponentStorage(ComponentStorage<Dynamic>) to ComponentStorage<Any> {
 	@:from private static inline function fromComponentStorage<T>(componentStorage:ComponentStorage<T>):DynamicComponentStorage {
 		return cast componentStorage;
 	}
@@ -310,7 +315,8 @@ abstract EntityComponents(ComponentTypes) from ComponentTypes {
 	 * updated by `ComponentStorage`, or by `Echoes.reset()`.
 	 */
 	@:allow(echoes.Echoes)
-	private static final components:Array<EntityComponents> = [];
+	@:allow(echoes.World)
+	// private static final components:Array<EntityComponents> = [];
 	
 	private inline function addComponentStorage(storage:DynamicComponentStorage):Void {
 		this.addComponentStorage(storage);
@@ -320,11 +326,11 @@ abstract EntityComponents(ComponentTypes) from ComponentTypes {
 	 * Gets the `EntityComponents` list for the given entity.
 	 */
 	@:allow(echoes.Entity)
-	private static inline function forEntity(entity:Entity):EntityComponents {
-		if(components[entity.id] == null) {
-			return components[entity.id] = new EntityComponents();
+	private static inline function forEntity(entity:Entity, world : World):EntityComponents {
+		if(world.components[entity.id] == null) {
+			return world.components[entity.id] = new EntityComponents();
 		} else {
-			return components[entity.id];
+			return world.components[entity.id];
 		}
 	}
 	
@@ -332,12 +338,12 @@ abstract EntityComponents(ComponentTypes) from ComponentTypes {
 	 * @see `Entity.removeAll()`
 	 */
 	@:allow(echoes.Entity)
-	private static inline function removeAll(entity:Entity):Void {
-		final entityComponents:EntityComponents = components[entity.id];
+	private static inline function removeAll(entity:Entity, world: World):Void {
+		final entityComponents:EntityComponents = world.components[entity.id];
 		if(entityComponents != null) {
-			components[entity.id] = new EntityComponents();
+			world.components[entity.id] = new EntityComponents();
 			for(componentStorage in entityComponents) {
-				componentStorage.remove(entity);
+				componentStorage.remove(entity, world);
 			}
 		}
 	}
@@ -355,8 +361,8 @@ abstract EntityComponents(ComponentTypes) from ComponentTypes {
 	 * For instance, if the entity has `Bool` and `String` components, the map
 	 * might be `["StdTypes.Bool" => true, "String" => "Hello World"]`.
 	 */
-	@:to private inline function toMap():Map<String, Dynamic> {
-		final entity:Entity = switch(components.indexOf(cast this)) {
+	public inline function toMap(world: World):Map<String, Dynamic> {
+		final entity:Entity = switch(world.components.indexOf(cast this)) {
 			case -1:
 				throw "This EntityComponents instance was disposed.";
 			case x:

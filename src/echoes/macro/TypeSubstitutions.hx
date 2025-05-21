@@ -6,7 +6,6 @@ import haxe.macro.Expr;
 import haxe.macro.Printer;
 import haxe.macro.Type;
 
-using echoes.Echoes;
 using echoes.macro.MacroTools;
 using haxe.macro.ComplexTypeTools;
 using haxe.macro.Context;

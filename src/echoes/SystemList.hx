@@ -1,6 +1,6 @@
 package echoes;
 
-import echoes.Echoes.SystemDetails;
+import echoes.World.SystemDetails;
 import echoes.utils.Clock;
 
 /**
@@ -38,8 +38,8 @@ class SystemList extends System {
 	
 	private final systems:Array<System> = [];
 	
-	public function new(?name:String = "SystemList", ?clock:Clock, ?priority:Int = 0) {
-		super(priority);
+	public function new(world, ?name:String = "SystemList", ?clock:Clock, ?priority:Int = 0) {
+		super(world, priority);
 		
 		this.name = name;
 		this.clock = clock != null ? clock : new Clock();
@@ -85,6 +85,7 @@ class SystemList extends System {
 		
 		__dt__ = dt;
 		clock.addTime(dt);
+		// trace('systemlist update! $systems $clock clock has next?: ${clock.hasNext()} is paused? ${clock.paused} clock time: ${clock.time} dt: ${dt}');
 		for(step in clock) {
 			for(system in systems) {
 				system.__update__(step);
@@ -199,6 +200,6 @@ class SystemList extends System {
 	}
 	
 	public override function toString():String {
-		return name;
+		return '$name: $systems';
 	}
 }

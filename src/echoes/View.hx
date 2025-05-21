@@ -21,23 +21,28 @@ class ViewBase {
 	 */
 	public final componentStorage:ReadOnlyArray<DynamicComponentStorage>;
 	
-	@:allow(echoes.Echoes) @:allow(echoes.ComponentStorage)
+	@:allow(echoes.Echoes) 
+	@:allow(echoes.World) 
+	@:allow(echoes.ComponentStorage)
 	private final _entities:Array<Entity> = [];
 	/**
 	 * All entities in this view.
 	 */
 	public var entities(get, never):ReadOnlyArray<Entity>;
 	private inline function get_entities():ReadOnlyArray<Entity> return _entities;
+
+	final world : World;
 	
-	public inline function new(componentStorage:Array<DynamicComponentStorage>) {
+	public inline function new(world : Dynamic, componentStorage:Array<DynamicComponentStorage>) {
+		this.world = cast world;
 		this.componentStorage = componentStorage;
 	}
 	
 	public function activate():Void {
 		activations++;
 		if(activations == 1) {
-			Echoes._activeViews.push(this);
-			for(e in Echoes.activeEntities) {
+			world._activeViews.push(this);
+			for(e in world.activeEntities) {
 				add(e);
 			}
 			for(storage in componentStorage) {
@@ -96,9 +101,11 @@ class ViewBase {
 		}
 	}
 	
-	@:allow(echoes.Echoes) private function reset():Void {
+	@:allow(echoes.Echoes) 
+	@:allow(echoes.World) 
+	private function reset():Void {
 		activations = 0;
-		Echoes._activeViews.remove(this);
+		world._activeViews.remove(this);
 		_entities.resize(0);
 		
 		for(storage in componentStorage) {
@@ -153,8 +160,11 @@ class DynamicView extends ViewBase {
 	public final onAdded:Signal<(Entity, Array<Any>) -> Void> = new Signal<(Entity, Array<Any>) -> Void>();
 	public final onRemoved:Signal<(Entity, Array<Any>) -> Void> = new Signal<(Entity, Array<Any>) -> Void>();
 	
-	public inline function new(...componentStorage:DynamicComponentStorage) {
-		super(componentStorage);
+	public inline function new(world: World, ...componentStorage:DynamicComponentStorage) {
+		// #if debug
+		// echoes.macro.MacroTools.checkWorld(world);
+		// #end
+		super(world, componentStorage);
 	}
 	
 	private override function dispatchAddedCallback(entity:Entity):Void {

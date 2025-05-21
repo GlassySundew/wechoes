@@ -300,6 +300,29 @@ class MacroTools {
 				return null;
 		}
 	}
+
+	public inline static function checkWorld(world : ExprOf<echoes.World>) {
+		#if debug
+		var worldType = Context.typeof(world);
+		function isWorldType(t:Type):Bool {
+			switch (t) {
+				case TType(tdef, _):
+					return tdef.get().name == "World" && tdef.get().module == "echoes.World";
+				case TInst(c, _):
+					return c.get().name == "World" && c.get().module == "echoes.World";
+				case TAbstract(a, _):
+					return a.get().name == "World" && a.get().module == "echoes.World";
+				case TMono(r):
+					return r != null && r.get() != null && isWorldType(r.get());
+				default:
+					return false;
+			}
+		}
+		if (!isWorldType(worldType)) {
+			Context.error('Argument "world" must be of type echoes.World', world.pos);
+		}
+		#end
+	}
 }
 
 #end
