@@ -103,7 +103,9 @@ abstract Entity( Int ) {
 	 */
 	public macro function add( ethis : Expr, world : ExprOf<World>, components : Array<Expr> ) : ExprOf<echoes.Entity> {
 		// Macro-time type check for 'world' argument
+		#if debug
 		MacroTools.checkWorld(world);
+		#end
 		return EntityTools.add( ethis, world, components );
 	}
 

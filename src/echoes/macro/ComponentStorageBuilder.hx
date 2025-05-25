@@ -15,7 +15,7 @@ using haxe.macro.ComplexTypeTools;
 class ComponentStorageBuilder {
 	public static inline final PREFIX:String = "ComponentStorage_";
 
-	private static final storageCache:Map<String, TypeDefinition> = new Map();
+	// private static final storageCache:Map<String, Expr> = new Map();
 	
 	private static var registered:Bool = false;
 	
@@ -23,9 +23,9 @@ class ComponentStorageBuilder {
 		world:ExprOf<World>, 
 		componentComplexType:ComplexType
 	):Expr {
-		// if(Context.defined("display") || Sys.args().indexOf("--no-output") >= 0) {
-		// 	return macro new echoes.ComponentStorage<$componentComplexType>("For code completion only. If you see this at runtime, it's an error.");
-		// }
+		if(Context.defined("display") || Sys.args().indexOf("--no-output") >= 0) {
+			return macro new echoes.ComponentStorage<$componentComplexType>("For code completion only. If you see this at runtime, it's an error.");
+		}
 
 		var cls = getComponentStorageName( componentComplexType );
 		var componentComplexType = componentComplexType.followComplexType();
@@ -46,7 +46,7 @@ class ComponentStorageBuilder {
 			}
 		}
 		
-		return macro /* @:pos( Context.currentPos() )  */ {
+		final result = macro @:pos( Context.currentPos() ) {
 			var inst = $world.getStorage( $v{cls} );
 
 			if ( inst == null ) {
@@ -56,6 +56,8 @@ class ComponentStorageBuilder {
 
 			inst;
 		};
+
+		return result;
 	}
 	
 	public static function getComponentStorageName(componentComplexType:ComplexType):String {
@@ -67,12 +69,12 @@ class ComponentStorageBuilder {
 		}
 		
 		final storageTypeName:String = PREFIX + componentComplexType.toIdentifier();
-		if(storageCache.exists(storageTypeName)) {
-			return storageTypeName;
-		}
+		// if(storageCache.exists(storageTypeName)) {
+		// 	return storageTypeName;
+		// }
 		
-		final componentTypeName:String = new Printer().printComplexType(componentComplexType);
-		final storageTypePath:TypePath = { pack: [], name: storageTypeName };
+		// final componentTypeName:String = new Printer().printComplexType(componentComplexType);
+		// final storageTypePath:TypePath = { pack: [], name: storageTypeName };
 		// var getInstance:Expr = macro new echoes.ComponentStorage<$componentComplexType>($v{ componentTypeName });
 		
 		// //If a custom singleton is defined, use that instead.
@@ -94,13 +96,13 @@ class ComponentStorageBuilder {
 		// };
 		
 		// storageCache.set(storageTypeName, def);
-		if(!registered) {
-			registered = true;
-			Context.onTypeNotFound(storageCache.get);
-		}
+		// if(!registered) {
+		// 	registered = true;
+		// 	Context.onTypeNotFound(storageCache.get);
+		// }
 		
-		Report.componentNames.push(componentTypeName);
-		Report.registerCallback();
+		// Report.componentNames.push(componentTypeName);
+		// Report.registerCallback();
 		
 		return storageTypeName;
 	}

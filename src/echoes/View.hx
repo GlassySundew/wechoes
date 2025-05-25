@@ -32,8 +32,8 @@ class ViewBase {
 
 	final world : World;
 	
-	public inline function new(world : Dynamic, componentStorage:Array<DynamicComponentStorage>) {
-		this.world = cast world;
+	public inline function new(world : World, componentStorage:Array<DynamicComponentStorage>) {
+		this.world = world;
 		this.componentStorage = componentStorage;
 	}
 	

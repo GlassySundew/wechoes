@@ -64,10 +64,10 @@ class AdvancedFunctionalityTest extends Test {
 	private function testDynamicViews():Void {
 		var world = new World();
 
-		final component0:ComponentStorage<Any> = new ComponentStorage<Any>(world, "component0", "compStorage0");
-		final component1:ComponentStorage<Any> = new ComponentStorage<Any>(world, "component1", "compStorage1");
+		final componentStorage0:ComponentStorage<Any> = new ComponentStorage<Any>(world, "component0", "compStorage0");
+		final componentStorage1:ComponentStorage<Any> = new ComponentStorage<Any>(world, "component1", "compStorage1");
 		
-		final view:DynamicView = new DynamicView(world, component0, component1);
+		final view:DynamicView = new DynamicView(world, componentStorage0, componentStorage1);
 		view.activate();
 		var added:String = "";
 		view.onAdded.add((entity, components) -> added += components.join(""));
@@ -75,20 +75,20 @@ class AdvancedFunctionalityTest extends Test {
 		view.onRemoved.add((entity, components) -> removed += components.join(""));
 		
 		final entity0:Entity = new Entity(world);
-		component0.add(entity0, "---", world);
-		component0.remove(entity0, world);
+		componentStorage0.add(entity0, "---", world);
+		componentStorage0.remove(entity0, world);
 		Assert.equals("", added);
 		Assert.equals("", removed);
 		
-		component1.add(entity0, "b", world);
-		component0.add(entity0, "a", world);
+		componentStorage1.add(entity0, "b", world);
+		componentStorage0.add(entity0, "a", world);
 		Assert.equals("ab", added);
 		Assert.equals("", removed);
 		
 		final entity1:Entity = new Entity(world);
 		entity1.add(world, "string");
-		component0.add(entity1, 0, world);
-		component1.add(entity1, 1, world);
+		componentStorage0.add(entity1, 0, world);
+		componentStorage1.add(entity1, 1, world);
 		Assert.equals("ab01", added);
 		Assert.equals("", removed);
 		
@@ -96,8 +96,8 @@ class AdvancedFunctionalityTest extends Test {
 		view.iter((entity, components) -> updated += components.join(""));
 		Assert.equals("ab01", updated);
 		
-		component1.remove(entity1, world);
-		component1.remove(entity0, world);
+		componentStorage1.remove(entity1, world);
+		componentStorage1.remove(entity0, world);
 		Assert.equals("ab01", added);
 		Assert.equals("01ab", removed);
 	}
@@ -451,21 +451,21 @@ class AdvancedFunctionalityTest extends Test {
 		//Make several entities with varying components.
 		var world = new World();
 
-		final name:Entity = new Entity(world).add(world, ("name1":Name));
-		final shape:Entity = new Entity(world).add(world, CIRCLE);
-		final colorName:Entity = new Entity(world).add(world, (0x00FF00:Color), ("name2":Name));
-		final colorShape:Entity = new Entity(world).add(world, (0xFFFFFF:Color), STAR);
+		final nameEntity:Entity = new Entity(world).add(world, ("name1":Name));
+		final shapeEntity:Entity = new Entity(world).add(world, CIRCLE);
+		final colorNameEntity:Entity = new Entity(world).add(world, (0x00FF00:Color), ("name2":Name));
+		final colorShapeEntity:Entity = new Entity(world).add(world, (0xFFFFFF:Color), STAR);
 		
 		//Make some views; each should see a different selection of entities.
 		final viewOfName:View<Name> = world.getView(Name);
 		Assert.equals(2, viewOfName.entities.length);
-		Assert.isTrue(viewOfName.entities.contains(name));
-		Assert.isTrue(viewOfName.entities.contains(colorName));
+		Assert.isTrue(viewOfName.entities.contains(nameEntity));
+		Assert.isTrue(viewOfName.entities.contains(colorNameEntity));
 		
 		final viewOfShape:View<Shape> = world.getView(Shape);
 		Assert.equals(2, viewOfShape.entities.length);
-		Assert.isTrue(viewOfShape.entities.contains(shape));
-		Assert.isTrue(viewOfShape.entities.contains(colorShape));
+		Assert.isTrue(viewOfShape.entities.contains(shapeEntity));
+		Assert.isTrue(viewOfShape.entities.contains(colorShapeEntity));
 		
 		//Test `iter()`.
 		var joinedNames:String = "";
@@ -473,26 +473,26 @@ class AdvancedFunctionalityTest extends Test {
 		Assert.equals("name1name2", joinedNames);
 		
 		//Remove a component.
-		colorName.remove(world, Name);
+		colorNameEntity.remove(world, Name);
 		Assert.equals(1, viewOfName.entities.length);
-		Assert.isFalse(viewOfName.entities.contains(colorName));
+		Assert.isFalse(viewOfName.entities.contains(colorNameEntity));
 		
 		//Make a view that's linked to a system.
 		final nameSystem:NameSystem = new NameSystem(world);
-		final viewOfColor:View<Color> = nameSystem.getLinkedView(Color);
-		Assert.isFalse(viewOfColor.active);
-		Assert.equals(0, viewOfColor.entities.length);
+		final colorView:View<Color> = nameSystem.getLinkedView(Color);
+		Assert.isFalse(colorView.active);
+		Assert.equals(0, colorView.entities.length);
 		
 		//Adding/removing the system should activate/deactivate the linked view.
 		nameSystem.activate();
-		Assert.isTrue(viewOfColor.active);
-		Assert.equals(2, viewOfColor.entities.length);
-		Assert.isTrue(viewOfColor.entities.contains(colorName));
-		Assert.isTrue(viewOfColor.entities.contains(colorShape));
+		Assert.isTrue(colorView.active);
+		Assert.equals(2, colorView.entities.length);
+		Assert.isTrue(colorView.entities.contains(colorNameEntity));
+		Assert.isTrue(colorView.entities.contains(colorShapeEntity));
 		
 		nameSystem.deactivate();
-		Assert.isFalse(viewOfColor.active);
-		Assert.equals(0, viewOfColor.entities.length);
+		Assert.isFalse(colorView.active);
+		Assert.equals(0, colorView.entities.length);
 	}
 	
 	private function testViewSignals():Void {
