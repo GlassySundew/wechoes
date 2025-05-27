@@ -24,7 +24,7 @@ class ComponentStorageBuilder {
 		componentComplexType:ComplexType
 	):Expr {
 		if(Context.defined("display") || Sys.args().indexOf("--no-output") >= 0) {
-			return macro new echoes.ComponentStorage<$componentComplexType>("For code completion only. If you see this at runtime, it's an error.");
+			return macro new echoes.ComponentStorage<$componentComplexType>(world, "For code completion only. If you see this at runtime, it's an error.", "");
 		}
 
 		var cls = getComponentStorageName( componentComplexType );

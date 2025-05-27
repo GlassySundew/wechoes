@@ -71,6 +71,8 @@ class World {
 
 	private var updateTimer : haxe.Timer;
 
+	final services:Map<String, Any> = [];
+
 	public function new() {
 		activeSystems = new SystemList( this );
 		activeSystems.__activate__();
@@ -133,6 +135,18 @@ class World {
 		this._componentStorage.set( id, componentStorage );
 	}
 
+	public macro function getService<T>(ethis : ExprOf<World>, type:ExprOf<Class<T>> ) :ExprOf<T> {
+		var cl = MacroTools.parseClassExpr(type);
+
+		return macro {@:privateAccess ($ethis.services.get($v{util.Macros.getTypeIdentifier(cl)}): $cl);};
+	}
+	
+	public macro function setService<T>(ethis : ExprOf<World>, type:ExprOf<Class<T>>, value : ExprOf<T> ) :Expr {
+		var cl = MacroTools.parseClassExpr(type);
+
+		return macro {@:privateAccess $ethis.services.set($v{util.Macros.getTypeIdentifier(cl)}, $value);};
+	}
+	
 	public function getOrCreateView<T: ViewBase>( id : String, viewType : Class<T> ):T {
 		if ( viewStorage[id] == null ) {
 			viewStorage[id] = Type.createInstance( viewType, [this] );

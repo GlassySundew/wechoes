@@ -85,7 +85,6 @@ class SystemList extends System {
 		
 		__dt__ = dt;
 		clock.addTime(dt);
-		// trace('systemlist update! $systems $clock clock has next?: ${clock.hasNext()} is paused? ${clock.paused} clock time: ${clock.time} dt: ${dt}');
 		for(step in clock) {
 			for(system in systems) {
 				system.__update__(step);

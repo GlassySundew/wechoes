@@ -1,4 +1,5 @@
 #Sample usage: haxe tests.hxml --interp
+# -v
 -cp src
 -cp test
 -lib hxToolShed

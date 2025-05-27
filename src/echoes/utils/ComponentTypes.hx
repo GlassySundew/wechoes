@@ -44,6 +44,7 @@ using echoes.macro.MacroTools;
  */
 @:forward(length) @:forward.new
 abstract ComponentTypes(Array<DynamicComponentStorage>) from Array<DynamicComponentStorage> {
+
 	#if macro static #else macro #end
 	public function add(self:Expr, world : ExprOf<World>, type:ExprOf<Class<Any>>):Expr {
 		//Don't accept instances, as those are likely to be
