@@ -20,231 +20,231 @@ import haxe.Unserializer;
  * be sure to test the performance impact.
  */
 class ComponentStorage<T> {
-	private static final DOT_PATH:EReg = ~/(?:\w+\.)*(\w+)/g;
-	
+
+	private static final DOT_PATH : EReg = ~/(?:\w+\.)*(\w+)/g;
+
 	/**
 	 * The component's fully-qualified type, in string form. For instance,
 	 * `Echoes.getComponentStorage(Bool).componentType` is `"StdTypes.Bool"`.
 	 */
-	public final componentType:String;
-	
-	public var name(get, never):String;
-	private inline function get_name():String {
+	public final componentType : String;
+
+	public var name( get, never ) : String;
+	private inline function get_name() : String {
 		return 'ComponentStorage<$componentType>';
 	}
-	
+
 	/**
 	 * Entity IDs for which this component is currently being removed. During
 	 * this time, the component cannot be re-added.
 	 */
-	private final ongoingRemovals:Array<Int> = [];
-	
+	private final ongoingRemovals : Array<Int> = [];
+
 	/**
 	 * All views that include this type of component.
 	 */
-	public var relatedViews(get, never):ReadOnlyArray<ViewBase>;
-	private inline function get_relatedViews():ReadOnlyArray<ViewBase> {
+	public var relatedViews( get, never ) : ReadOnlyArray<ViewBase>;
+	private inline function get_relatedViews() : ReadOnlyArray<ViewBase> {
 		return _relatedViews;
 	}
-	
-	@:allow(echoes.DynamicComponentStorage)
-	private final _relatedViews:Array<ViewBase> = [];
-	
+
+	@:allow( echoes.DynamicComponentStorage )
+	private final _relatedViews : Array<ViewBase> = [];
+
 	/**
 	 * As `componentType`, except without package information. This is easier to
 	 * read but may not be unique.
 	 */
-	public var shortComponentType(get, never):String;
-	private inline function get_shortComponentType():String {
-		return DOT_PATH.replace(componentType, "$1");
+	public var shortComponentType( get, never ) : String;
+	private inline function get_shortComponentType() : String {
+		return DOT_PATH.replace( componentType, "$1" );
 	}
-	
+
 	/**
 	 * All components of this type.
 	 */
-	@:allow(echoes.World)
-	#if (echoes_storage == "Map")
-	private final storage:Map<Int, T> = new Map();
+	@:allow( echoes.World )
+	#if( echoes_storage == "Map" )
+	private final storage : Map<Int, T> = new Map();
 	#else
-	private final storage:Array<Null<T>> = [];
+	private final storage : Array<Null<T>> = [];
 	#end
-	
-	public inline function new(world : World, componentType:String, storageName: String) {
+	public inline function new( world : World, componentType : String, storageName : String ) {
 		this.componentType = componentType;
-		world.addStorage(storageName, this);
-		
-		//Some platforms get confused by the declaration of `Array<Null<T>>`,
-		//and treat that as something like `Array<Dynamic>`, and then cast to
-		//int, converting null to 0.
-		
-		//So far, this has only been seen in C++, and can be fixed by inserting
-		//a null value anywhere in the array.
-		#if (cpp && (echoes_storage != "Map"))
+		world.addStorage( storageName, this );
+
+		// Some platforms get confused by the declaration of `Array<Null<T>>`,
+		// and treat that as something like `Array<Dynamic>`, and then cast to
+		// int, converting null to 0.
+
+		// So far, this has only been seen in C++, and can be fixed by inserting
+		// a null value anywhere in the array.
+		#if( cpp && ( echoes_storage != "Map" ) )
 		storage[0] = null;
 		#end
 	}
-	
-	public function add(entity:Entity, component:Null<T>, world : World):Void {
-		if(component == null) {
-			remove(entity, world);
+
+	public function add( entity : Entity, component : Null<T>, world : World ) : Void {
+		if ( component == null ) {
+			remove( entity, world );
 			return;
 		}
-		
-		if(get(entity) == component) {
+
+		if ( get( entity ) == component ) {
 			return;
 		}
-		
-		if(ongoingRemovals.contains(entity.id)) {
-			throw 'Attempted to add $componentType to entity ${ entity.id } during a @:remove listener for that component.';
+
+		if ( ongoingRemovals.contains( entity.id ) ) {
+			throw 'Attempted to add $componentType to entity ${entity.id} during a @:remove listener for that component.';
 		}
-		
+
 		storage[entity.id] = component;
-		
-		var components:EntityComponents = world.components[entity.id];
-		if(components == null) {
+
+		var components : EntityComponents = world.components[entity.id];
+		if ( components == null ) {
 			world.components[entity.id] = components = new EntityComponents();
 		}
-		components.addComponentStorage(this);
-		
-		if(entity.isActive(world)) {
-			var exception:Exception = null;
-			for(view in relatedViews) {
+		components.addComponentStorage( this );
+
+		if ( entity.isActive( world ) ) {
+			var exception : Exception = null;
+			for ( view in relatedViews ) {
 				try {
-					view.add(entity);
-				} catch(e:Exception) {
-					if(exception == null) {
+					view.add( entity );
+				} catch( e : Exception ) {
+					if ( exception == null ) {
 						exception = e;
 					}
 				}
-				
-				//Stop dispatching events if a listener removed it.
-				if(!exists(entity)) {
+
+				// Stop dispatching events if a listener removed it.
+				if ( !exists( entity ) ) {
 					break;
 				}
 			}
-			
-			if(exception != null) {
+
+			if ( exception != null ) {
 				throw exception;
 			}
 		}
 	}
-	
-	@:allow(echoes.World)
-	private inline function clear():Void {
-		#if (echoes_storage == "Map")
+
+	@:allow( echoes.World )
+	private inline function clear() : Void {
+		#if( echoes_storage == "Map" )
 		storage.clear();
 		#else
-		#if (eval && !haxe5)
-		//Work around a bug in the eval target.
-		for(i in 0...storage.length) {
+		#if( eval && !haxe5 )
+		// Work around a bug in the eval target.
+		for ( i in 0...storage.length ) {
 			storage[i] = null;
 		}
 		#end
-		storage.resize(0);
+		storage.resize( 0 );
 		#end
-		
-		ongoingRemovals.resize(0);
+
+		ongoingRemovals.resize( 0 );
 	}
-	
-	public inline function exists(entity:Entity):Bool {
-		#if (echoes_storage == "Map")
-		return storage.exists(entity.id);
+
+	public inline function exists( entity : Entity ) : Bool {
+		#if( echoes_storage == "Map" )
+		return storage.exists( entity.id );
 		#else
 		return storage[entity.id] != null;
 		#end
 	}
-	
-	public inline function get(entity:Entity):Null<T> {
+
+	public inline function get( entity : Entity ) : Null<T> {
 		return storage[entity.id];
 	}
-	
-	public function remove(entity:Entity, world : World):Void {
-		final removedComponent:Null<T> = get(entity);
-		
-		#if (echoes_storage == "Map")
-		storage.remove(entity.id);
+
+	public function remove( entity : Entity, world : World ) : Void {
+		final removedComponent : Null<T> = get( entity );
+
+		#if( echoes_storage == "Map" )
+		storage.remove( entity.id );
 		#else
 		storage[entity.id] = null;
 		#end
-		
-		if(removedComponent != null) {
-			world.components[entity.id].removeComponentStorage(this);
-			
-			if(entity.isActive(world)) {
-				ongoingRemovals.push(entity.id);
-				
-				var exception:Exception = null;
-				for(view in relatedViews) {
+
+		if ( removedComponent != null ) {
+			world.components[entity.id].removeComponentStorage( this );
+
+			if ( entity.isActive( world ) ) {
+				ongoingRemovals.push( entity.id );
+
+				var exception : Exception = null;
+				for ( view in relatedViews ) {
 					try {
-						view.remove(entity, this, removedComponent);
-					} catch(e:Exception) {
-						if(exception == null) {
+						view.remove( entity, this, removedComponent );
+					} catch( e : Exception ) {
+						if ( exception == null ) {
 							exception = e;
 						}
 					}
 				}
-				
-				ongoingRemovals.remove(entity.id);
-				
-				if(exception != null) {
+
+				ongoingRemovals.remove( entity.id );
+
+				if ( exception != null ) {
 					throw exception;
 				}
 			}
 		}
 	}
-	
+
 	/**
 	 * Removes all components of this type from all entities.
 	 */
-	public inline function removeAll(world : World):Void {
-		for(entity => component in storage) {
-			if(component != null) {
-				remove(cast entity, world);
+	public inline function removeAll( world : World ) : Void {
+		for ( entity => component in storage ) {
+			if ( component != null ) {
+				remove( cast entity, world );
 			}
 		}
 	}
-	
+
 	/**
 	 * Dispatches a `@:remove` event (if applicable) before adding `component`.
 	 * To use this for a given component, tag the type with `@:echoes_replace`.
 	 */
-	public function replace(entity:Entity, component:Null<T>, world : World):Void {
-		if(get(entity) != component) {
-			var exception:Exception = null;
+	public function replace( entity : Entity, component : Null<T>, world : World ) : Void {
+		if ( get( entity ) != component ) {
+			var exception : Exception = null;
 			try {
-				remove(entity, world);
-			} catch(e:Exception) {
-				if(exception == null) {
+				remove( entity, world );
+			} catch( e : Exception ) {
+				if ( exception == null ) {
 					exception = e;
 				}
 			}
-			
+
 			try {
-				add(entity, component, world);
-			} catch(e:Exception) {
-				if(exception == null) {
+				add( entity, component, world );
+			} catch( e : Exception ) {
+				if ( exception == null ) {
 					exception = e;
 				}
 			}
-			
-			if(exception != null) {
+
+			if ( exception != null ) {
 				throw exception;
 			}
 		}
 	}
-	
+
 	/**
 	 * Saves all components of this type to string.
 	 * @see `Echoes.serialize()` to save all components at once.
 	 */
-	public function serialize():String {
-		return Serializer.run(storage);
+	public function serialize() : String {
+		return Serializer.run( storage );
 	}
-	
-	private inline function toString():String {
+
+	private inline function toString() : String {
 		return name;
 	}
-	
+
 	/**
 	 * Restores all components of this type from string, overwriting any
 	 * existing components.
@@ -255,22 +255,22 @@ class ComponentStorage<T> {
 	 * `Float`, can cause errors on some targets.
 	 * @see `Echoes.unserialize()` to restore all components at once.
 	 */
-	public function unserialize(data:String, world: World):Void {
-		removeAll(world);
-		
-		unserializeFromData(Unserializer.run(data), world);
+	public function unserialize( data : String, world : World ) : Void {
+		removeAll( world );
+
+		unserializeFromData( Unserializer.run( data ), world );
 	}
-	
-	@:allow(echoes.World)
+
+	@:allow( echoes.World )
 	private function unserializeFromData(
-		data:#if (echoes_storage == "Map") Map<Int, T> #else Array<Null<T>> #end,
+		data : #if( echoes_storage == "Map" ) Map<Int, T> #else Array<Null<T>> #end,
 		world : World
 	) {
 		clear();
-		
-		if(data != null) {
-			for(entity => component in data) {
-				add(cast entity, component, world);
+
+		if ( data != null ) {
+			for ( entity => component in data ) {
+				add( cast entity, component, world );
 			}
 		}
 	}
@@ -286,15 +286,16 @@ class ComponentStorage<T> {
  * add components, use `new ComponentStorage<Dynamic>()` instead. Obviously, no
  * type checking will be performed.
  */
-@:forward(clear, componentType, exists, get, name, relatedViews, remove, removeAll, shortComponentType)
-abstract DynamicComponentStorage(ComponentStorage<Dynamic>) to ComponentStorage<Any> {
-	@:from private static inline function fromComponentStorage<T>(componentStorage:ComponentStorage<T>):DynamicComponentStorage {
+@:forward( clear, componentType, exists, get, name, relatedViews, remove, removeAll, shortComponentType )
+abstract DynamicComponentStorage( ComponentStorage<Dynamic> ) to ComponentStorage<Any> {
+
+	@:from private static inline function fromComponentStorage<T>( componentStorage : ComponentStorage<T> ) : DynamicComponentStorage {
 		return cast componentStorage;
 	}
-	
-	@:allow(echoes.ViewBase)
-	private var _relatedViews(get, never):Array<ViewBase>;
-	private inline function get__relatedViews():Array<ViewBase> {
+
+	@:allow( echoes.ViewBase )
+	private var _relatedViews( get, never ) : Array<ViewBase>;
+	private inline function get__relatedViews() : Array<ViewBase> {
 		return this._relatedViews;
 	}
 }
@@ -304,67 +305,67 @@ abstract DynamicComponentStorage(ComponentStorage<Dynamic>) to ComponentStorage<
  * up an individual component, but it helps with batch operations such as
  * `deactivate()` and `destroy()`.
  */
-@:forward(contains, containsComponentStorage, iterator, length) @:forward.new
-@:allow(echoes.ComponentStorage)
-abstract EntityComponents(ComponentTypes) from ComponentTypes {
+@:forward( contains, containsComponentStorage, iterator, length ) @:forward.new
+@:allow( echoes.ComponentStorage )
+abstract EntityComponents( ComponentTypes ) from ComponentTypes {
+
 	/**
 	 * The source data for all `EntityComponents` lists. This should only be
 	 * updated by `ComponentStorage`, or by `Echoes.reset()`.
 	 */
-	@:allow(echoes.World)
+	@:allow( echoes.World )
 	// private static final components:Array<EntityComponents> = [];
-	
-	private inline function addComponentStorage(storage:DynamicComponentStorage):Void {
-		this.addComponentStorage(storage);
+	private inline function addComponentStorage( storage : DynamicComponentStorage ) : Void {
+		this.addComponentStorage( storage );
 	}
-	
+
 	/**
 	 * Gets the `EntityComponents` list for the given entity.
 	 */
-	@:allow(echoes.Entity)
-	private static inline function forEntity(entity:Entity, world : World):EntityComponents {
-		if(world.components[entity.id] == null) {
+	@:allow( echoes.Entity )
+	private static inline function forEntity( entity : Entity, world : World ) : EntityComponents {
+		if ( world.components[entity.id] == null ) {
 			return world.components[entity.id] = new EntityComponents();
 		} else {
 			return world.components[entity.id];
 		}
 	}
-	
+
 	/**
 	 * @see `Entity.removeAll()`
 	 */
-	@:allow(echoes.Entity)
-	private static inline function removeAll(entity:Entity, world: World):Void {
-		final entityComponents:EntityComponents = world.components[entity.id];
-		if(entityComponents != null) {
+	@:allow( echoes.Entity )
+	private static inline function removeAll( entity : Entity, world : World ) : Void {
+		final entityComponents : EntityComponents = world.components[entity.id];
+		if ( entityComponents != null ) {
 			world.components[entity.id] = new EntityComponents();
-			for(componentStorage in entityComponents) {
-				componentStorage.remove(entity, world);
+			for ( componentStorage in entityComponents ) {
+				componentStorage.remove( entity, world );
 			}
 		}
 	}
-	
-	private inline function removeComponentStorage(storage:DynamicComponentStorage):Bool {
-		return this.removeComponentStorage(storage);
+
+	private inline function removeComponentStorage( storage : DynamicComponentStorage ) : Bool {
+		return this.removeComponentStorage( storage );
 	}
-	
-	@:to private inline function toIterable():Iterable<DynamicComponentStorage> {
+
+	@:to private inline function toIterable() : Iterable<DynamicComponentStorage> {
 		return this;
 	}
-	
+
 	/**
 	 * Creates a `Map` of the entity's components, mapping types onto values.
 	 * For instance, if the entity has `Bool` and `String` components, the map
 	 * might be `["StdTypes.Bool" => true, "String" => "Hello World"]`.
 	 */
-	public inline function toMap(world: World):Map<String, Dynamic> {
-		final entity:Entity = switch(world.components.indexOf(cast this)) {
+	public inline function toMap( world : World ) : Map<String, Dynamic> {
+		final entity : Entity = switch ( world.components.indexOf( cast this ) ) {
 			case -1:
 				throw "This EntityComponents instance was disposed.";
 			case x:
 				cast x;
 		};
-		
-		return [for(storage in this) storage.componentType => storage.get(entity)];
+
+		return [for ( storage in this ) storage.componentType => storage.get( entity )];
 	}
 }

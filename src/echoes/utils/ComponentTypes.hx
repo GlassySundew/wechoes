@@ -42,42 +42,42 @@ using echoes.macro.MacroTools;
  * }
  * ```
  */
-@:forward(length) @:forward.new
-abstract ComponentTypes(Array<DynamicComponentStorage>) from Array<DynamicComponentStorage> {
+@:forward( length ) @:forward.new
+abstract ComponentTypes( Array<DynamicComponentStorage> ) from Array<DynamicComponentStorage> {
 
 	#if macro static #else macro #end
-	public function add(self:Expr, world : ExprOf<World>, type:ExprOf<Class<Any>>):Expr {
-		//Don't accept instances, as those are likely to be
-		return macro $self.addComponentStorage( $world.getComponentStorage($type));
+	public function add( self : Expr, world : ExprOf<World>, type : ExprOf<Class<Any>> ) : Expr {
+		// Don't accept instances, as those are likely to be
+		return macro $self.addComponentStorage( $world.getComponentStorage( $type ) );
 	}
-	
-	public inline function addComponentStorage(storage:DynamicComponentStorage):Void {
-		if(!this.contains(storage)) {
-			this.push(storage);
+
+	public inline function addComponentStorage( storage : DynamicComponentStorage ) : Void {
+		if ( !this.contains( storage ) ) {
+			this.push( storage );
 		}
 	}
-	
+
 	#if macro static #else macro #end
-	public function contains(self:Expr, world : ExprOf<World>, type:ExprOf<Class<Any>>):ExprOf<Bool> {
-		return macro $self.containsComponentStorage($world.getComponentStorage($type));
+	public function contains( self : Expr, world : ExprOf<World>, type : ExprOf<Class<Any>> ) : ExprOf<Bool> {
+		return macro $self.containsComponentStorage( $world.getComponentStorage( $type ) );
 	}
-	
-	public inline function containsComponentStorage(storage:DynamicComponentStorage):Bool {
-		return this.contains(storage);
+
+	public inline function containsComponentStorage( storage : DynamicComponentStorage ) : Bool {
+		return this.contains( storage );
 	}
-	
-	@:noCompletion public inline function iterator():ArrayIterator<DynamicComponentStorage> {
+
+	@:noCompletion public inline function iterator() : ArrayIterator<DynamicComponentStorage> {
 		return this.iterator();
 	}
-	
+
 	#if macro static #else macro #end
-	public function remove(self:Expr, world : ExprOf<World>, type:ExprOf<Class<Any>>):ExprOf<Bool> {
-		return macro $self.removeComponentStorage($world.getComponentStorage($type));
+	public function remove( self : Expr, world : ExprOf<World>, type : ExprOf<Class<Any>> ) : ExprOf<Bool> {
+		return macro $self.removeComponentStorage( $world.getComponentStorage( $type ) );
 	}
-	
-	public inline function removeComponentStorage(storage:DynamicComponentStorage):Bool {
-		final index:Int = this.lastIndexOf(storage);
-		if(index >= 0) {
+
+	public inline function removeComponentStorage( storage : DynamicComponentStorage ) : Bool {
+		final index : Int = this.lastIndexOf( storage );
+		if ( index >= 0 ) {
 			this[index] = this[this.length - 1];
 			this.pop();
 			return true;
@@ -85,8 +85,8 @@ abstract ComponentTypes(Array<DynamicComponentStorage>) from Array<DynamicCompon
 			return false;
 		}
 	}
-	
-	@:to private inline function toIterable():Iterable<DynamicComponentStorage> {
+
+	@:to private inline function toIterable() : Iterable<DynamicComponentStorage> {
 		return this;
 	}
 }

@@ -104,11 +104,10 @@ abstract Entity( Int ) {
 	public macro function add( ethis : Expr, world : ExprOf<World>, components : Array<Expr> ) : ExprOf<echoes.Entity> {
 		// Macro-time type check for 'world' argument
 		#if debug
-		MacroTools.checkWorld(world);
+		MacroTools.checkWorld( world );
 		#end
 		return EntityTools.add( ethis, world, components );
 	}
-
 
 	/**
 	 * Adds one or more components to the entity, but only if those components
@@ -126,7 +125,7 @@ abstract Entity( Int ) {
 		world : ExprOf<World>,
 		components : Array<Expr>
 	) : ExprOf<echoes.Entity> {
-		MacroTools.checkWorld(world);
+		MacroTools.checkWorld( world );
 		return EntityTools.addIfMissing( self, world, components );
 	}
 
@@ -204,7 +203,7 @@ abstract Entity( Int ) {
 	public macro function exists( self : Expr, world : ExprOf<World>, type : ExprOf<Class<Any>> ) : ExprOf<Bool> {
 		return EntityTools.exists( self, world, type.parseClassExpr( true ) );
 	}
-	
+
 	/**
 	 * Gets this entity's component of the given type, if this entity has a
 	 * component of the given type.
@@ -231,7 +230,7 @@ abstract Entity( Int ) {
 	 * @return This entity.
 	 */
 	public macro function remove( self : Expr, world : ExprOf<World>, types : Array<ExprOf<Class<Any>>> ) : ExprOf<echoes.Entity> {
-		MacroTools.checkWorld(world);
+		MacroTools.checkWorld( world );
 		return EntityTools.remove( self, world, [for ( type in types ) type.parseClassExpr( true )] );
 	}
 

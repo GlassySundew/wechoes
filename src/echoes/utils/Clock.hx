@@ -37,6 +37,7 @@ package echoes.utils;
  * unsupported and may cause infinite loops or other unwanted behavior.
  */
 class Clock {
+
 	/**
 	 * The maximum tick length. By default, tick length is equal to the
 	 * remaining `time`, but this can make it shorter.
@@ -44,13 +45,13 @@ class Clock {
 	 * Setting `minTickLength` and `maxTickLength` to the same value creates a
 	 * fixed tick length.
 	 */
-	public var maxTickLength:Float = Math.POSITIVE_INFINITY;
-	
+	public var maxTickLength : Float = Math.POSITIVE_INFINITY;
+
 	/**
 	 * `time` will be capped to this value.
 	 */
-	public var maxTime:Float = Math.POSITIVE_INFINITY;
-	
+	public var maxTime : Float = Math.POSITIVE_INFINITY;
+
 	/**
 	 * Once `time` falls below this value, the `Clock` will stop ticking. Any
 	 * leftover time will be saved for later.
@@ -58,64 +59,63 @@ class Clock {
 	 * Setting `minTickLength` and `maxTickLength` to the same value creates a
 	 * fixed tick length.
 	 */
-	public var minTickLength:Float = 1e-16;
-	
+	public var minTickLength : Float = 1e-16;
+
 	/**
 	 * Prevents `time` from increasing, but doesn't prevent iterating over
 	 * whatever time remains.
 	 */
-	public var paused:Bool = false;
-	
+	public var paused : Bool = false;
+
 	/**
 	 * How many times this clock ticked since the last call to `addTime()`.
 	 */
-	public var tickCount:Int = 0;
-	
+	public var tickCount : Int = 0;
+
 	/**
 	 * The amount of time left on the `Clock`, in seconds.
 	 * 
 	 * To calculate [the blending factor](https://www.gafferongames.com/post/fix_your_timestep/#the-final-touch)
 	 * described in "Fix Your Timestep!", divide `time` by `minTickLength`.
 	 */
-	public var time(default, null):Float = 0;
-	
+	public var time( default, null ) : Float = 0;
+
 	/**
 	 * Multiplies all added time. This can speed time up (if `timeScale > 1`),
 	 * slow it down (if `0 < timeScale < 1`), or pause it (if `timeScale == 0`).
 	 */
-	public var timeScale:Float = 1;
-	
-	public inline function new() {
-	}
-	
-	public function addTime(time:Float):Void {
-		if(!paused) {
+	public var timeScale : Float = 1;
+
+	public inline function new() {}
+
+	public function addTime( time : Float ) : Void {
+		if ( !paused ) {
 			this.time += time * timeScale;
-			
-			if(this.time > maxTime) {
+
+			if ( this.time > maxTime ) {
 				this.time = maxTime;
 			}
-			
+
 			tickCount = 0;
 		}
 	}
-	
-	public inline function hasNext():Bool {
+
+	public inline function hasNext() : Bool {
 		return time >= minTickLength;
 	}
-	
-	public function next():Float {
-		final tick:Float = time > maxTickLength ? maxTickLength : time;
+
+	public function next() : Float {
+		final tick : Float = time > maxTickLength ? maxTickLength : time;
 		time -= tick;
 		tickCount++;
 		return tick;
 	}
-	
+
 	/**
 	 * Sets `minTickLength` and `maxTickLength` to the given value, ensuring
 	 * that every time this clock ticks, the tick will be the same length.
 	 */
-	public inline function setFixedTickLength(fixedTickLength:Float):Void {
+	public inline function setFixedTickLength( fixedTickLength : Float ) : Void {
 		minTickLength = maxTickLength = fixedTickLength;
 	}
 }

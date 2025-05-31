@@ -1,7 +1,6 @@
 package echoes.macro;
 
 #if macro
-
 import haxe.macro.Expr;
 import haxe.macro.Printer;
 import haxe.macro.Type;
@@ -14,19 +13,21 @@ using haxe.macro.Context;
 using Lambda;
 using StringTools;
 
-@:allow(echoes.macro.ListenerFunction)
+@:allow( echoes.macro.ListenerFunction )
 class SystemBuilder {
-	private static inline final ADD_META:String = "added";
-	private static inline final REMOVE_META:String = "removed";
-	private static inline final UPDATE_META:String = "updated";
-	private static inline final PRIORITY_META:String = "priority";
-	
-	private static final genericSystemCache:Map<String, ComplexType> = new Map();
-	
-	private static inline function notNull<T>(e:Null<T>):Bool {
+
+	private static inline final ADD_META : String = "added";
+	private static inline final REMOVE_META : String = "removed";
+	private static inline final UPDATE_META : String = "updated";
+	private static inline final EXCLUDE_META : String = "exclude";
+	private static inline final PRIORITY_META : String = "priority";
+
+	private static final genericSystemCache : Map<String, ComplexType> = new Map();
+
+	private static inline function notNull<T>( e : Null<T> ) : Bool {
 		return e != null;
 	}
-	
+
 	/**
 	 * Finds the first metadata entry that matches a search term, or comes
 	 * close. For the purpose of matching, leading colons are ignored, as is the
@@ -47,37 +48,37 @@ class SystemBuilder {
 	 * @param searchTerms A metadata name consisting of lowercase letters (no
 	 * colon, no "echoes_").
 	 */
-	private static function getMeta(meta:Metadata, searchTerm:String):Null<MetadataEntry> {
-		for(entry in meta) {
-			var name:String = entry.name;
-			if(name.startsWith(":")) {
-				name = name.substr(1);
+	private static function getMeta( meta : Metadata, searchTerm : String ) : Null<MetadataEntry> {
+		for ( entry in meta ) {
+			var name : String = entry.name;
+			if ( name.startsWith( ":" ) ) {
+				name = name.substr( 1 );
 			}
-			if(name.startsWith("echoes_")) {
-				name = name.substr("echoes_".length);
+			if ( name.startsWith( "echoes_" ) ) {
+				name = name.substr( "echoes_".length );
 			}
-			
-			if(name.length > 0 && searchTerm.startsWith(name)) {
-				if(!entry.name.startsWith(":")) {
-					Context.warning('@${entry.name} is deprecated; use @:${entry.name} instead.'
-						+ (entry.name == "remove" ? " (@:remove does have a reserved meaning when applied to interfaces, but not here.)" : ""),
-						entry.pos);
+
+			if ( name.length > 0 && searchTerm.startsWith( name ) ) {
+				if ( !entry.name.startsWith( ":" ) ) {
+					Context.warning( '@${entry.name} is deprecated; use @:${entry.name} instead.'
+						+ ( entry.name == "remove" ? " (@:remove does have a reserved meaning when applied to interfaces, but not here.)" : "" ),
+						entry.pos );
 				}
-				
+
 				return entry;
 			}
 		}
-		
+
 		return null;
 	}
-	
-	private static function getPriority(meta:Metadata, knownPriorities:Map<String, Expr>):String {
-		final entry:MetadataEntry = getMeta(meta, PRIORITY_META);
-		switch(entry) {
+
+	private static function getPriority( meta : Metadata, knownPriorities : Map<String, Expr> ) : String {
+		final entry : MetadataEntry = getMeta( meta, PRIORITY_META );
+		switch ( entry ) {
 			case null:
 			case _.params => [expr]:
-				final key:String = new Printer().printExpr(expr);
-				if(!knownPriorities.exists(key)) {
+				final key : String = new Printer().printExpr( expr );
+				if ( !knownPriorities.exists( key ) ) {
 					knownPriorities[key] = expr;
 				}
 				return key;
@@ -85,129 +86,129 @@ class SystemBuilder {
 		}
 		return null;
 	}
-	
-	public static function build():Array<Field> {
-		return buildInternal(false);
+
+	public static function build() : Array<Field> {
+		return buildInternal( false );
 	}
-	
-	private static function buildInternal(isGenericBuild:Bool):Array<Field> {
-		var fields:Array<Field> = Context.getBuildFields();
-		
-		if(Context.defined("display")) {
+
+	private static function buildInternal( isGenericBuild : Bool ) : Array<Field> {
+		var fields : Array<Field> = Context.getBuildFields();
+
+		if ( Context.defined( "display" ) ) {
 			return fields;
 		}
-		
-		//Information gathering
-		//=====================
-		
-		var substitutions:TypeSubstitutions = null;
-		var nameWithParams:String;
-		final classType:ClassType = switch(Context.getLocalType()) {
-			case TInst(_.get() => inst, types):
+
+		// Information gathering
+		// =====================
+
+		var substitutions : TypeSubstitutions = null;
+		var nameWithParams : String;
+		final classType : ClassType = switch ( Context.getLocalType() ) {
+			case TInst( _.get() => inst, types ):
 				nameWithParams = inst.name;
-				
-				if(!isGenericBuild && inst.params.length > 0) {
-					//Apply some default substitutions to improve completion.
-					substitutions = new TypeSubstitutions(inst);
-				} else if(types.length > 0) {
-					substitutions = new TypeSubstitutions(inst, types);
-					nameWithParams += "<" + [for(type in types) new Printer().printComplexType(type.toComplexType())].join(", ") + ">";
+
+				if ( !isGenericBuild && inst.params.length > 0 ) {
+					// Apply some default substitutions to improve completion.
+					substitutions = new TypeSubstitutions( inst );
+				} else if ( types.length > 0 ) {
+					substitutions = new TypeSubstitutions( inst, types );
+					nameWithParams += "<" + [for ( type in types )
+						new Printer().printComplexType( type.toComplexType() )].join( ", " ) + ">";
 				}
-				
+
 				inst;
 			default:
-				Context.warning("SystemBuilder only acts on classes.", Context.currentPos());
+				Context.warning( "SystemBuilder only acts on classes.", Context.currentPos() );
 				return fields;
 		};
-		
+
 		/**
 		 * `classType`, plus all superclasses in order, including `System`.
 		 */
-		final parentTypes:Array<ClassType> = [classType];
+		final parentTypes : Array<ClassType> = [classType];
 		{
-			var parentType:ClassType = classType;
-			while(parentType.superClass != null) {
+			var parentType : ClassType = classType;
+			while ( parentType.superClass != null ) {
 				parentType = parentType.superClass.t.get();
-				parentTypes.push(parentType);
+				parentTypes.push( parentType );
 			}
-			if(parentTypes.length < 2 || parentType.name != "System"
-				|| parentType.pack.length != 1 || parentType.pack[0] != "echoes") {
-				Context.fatalError('${ classType.name } must extend echoes.System.', Context.currentPos());
+			if ( parentTypes.length < 2 || parentType.name != "System"
+				|| parentType.pack.length != 1 || parentType.pack[0] != "echoes" ) {
+				Context.fatalError( '${classType.name} must extend echoes.System.', Context.currentPos() );
 			}
 		}
-		
-		//Non-generic builds may be skipped.
-		if(!isGenericBuild) {
-			for(type in parentTypes) {
-				if(type.meta.has(":skipBuildMacro")) {
+
+		// Non-generic builds may be skipped.
+		if ( !isGenericBuild ) {
+			for ( type in parentTypes ) {
+				if ( type.meta.has( ":skipBuildMacro" ) ) {
 					return fields;
 				}
 			}
 		}
-		
-		//Type substitutions
-		//==================
-		
-		if(substitutions != null) {
-			if(!classType.meta.has(":genericBuild")) {
-				Context.fatalError("Systems with type parameters must be tagged `@:genericBuild(echoes.macro.SystemBuilder.genericBuild())`.", Context.currentPos());
+
+		// Type substitutions
+		// ==================
+
+		if ( substitutions != null ) {
+			if ( !classType.meta.has( ":genericBuild" ) ) {
+				Context.fatalError( "Systems with type parameters must be tagged `@:genericBuild(echoes.macro.SystemBuilder.genericBuild())`.", Context.currentPos() );
 			}
-			
-			fields = fields.map(substitutions.substituteField);
+
+			fields = fields.map( substitutions.substituteField );
 		} else {
-			if(classType.meta.has(":genericBuild")) {
-				Context.fatalError("@:genericBuild requires type parameters.", Context.currentPos());
+			if ( classType.meta.has( ":genericBuild" ) ) {
+				Context.fatalError( "@:genericBuild requires type parameters.", Context.currentPos() );
 			}
 		}
-		
-		//Linked views
-		//============
-		
+
+		// Linked views
+		// ============
+
 		/**
 		 * Names of views that should activate and deactivate with the system.
 		 */
-		final linkedViews:Array<String> = [];
-		
-		//Variable initializers can't actually call `getLinkedView()`, so locate
-		//and replace such calls.
-		for(field in fields) {
-			final expr:Expr = switch(field.kind) {
-				case FVar(_, expr), FProp(_, _, _, expr) if(expr != null):
+		final linkedViews : Array<String> = [];
+
+		// Variable initializers can't actually call `getLinkedView()`, so locate
+		// and replace such calls.
+		for ( field in fields ) {
+			final expr : Expr = switch ( field.kind ) {
+				case FVar( _, expr ), FProp( _, _, _, expr ) if ( expr != null ):
 					expr;
 				default:
 					continue;
 			};
-			
-			final params:Array<Expr> = switch(expr.expr) {
-				case ECall(_.expr => EConst(CIdent("getLinkedView")) | EField(_, "getLinkedView"), params):
+
+			final params : Array<Expr> = switch ( expr.expr ) {
+				case ECall( _.expr => EConst( CIdent( "getLinkedView" ) ) | EField( _, "getLinkedView" ), params ):
 					params;
 				default:
 					continue;
 			};
-			
-			//Get the inactive view for now.
-			expr.expr = World.getInactiveView(macro world, params).expr;
-			
-			final viewName:String = switch(expr.expr) {
-				case EField(_.expr => EConst(CIdent(name)), "instance"):
+
+			// Get the inactive view for now.
+			expr.expr = World.getInactiveView( macro world, params ).expr;
+
+			final viewName : String = switch ( expr.expr ) {
+				case EField( _.expr => EConst( CIdent( name ) ), "instance" ):
 					name;
 				default:
 					throw "Echoes.getInactiveView() returned an unexpected format. Please report this change.";
 			};
-			
-			//Save the view to link later.
-			if(!linkedViews.contains(viewName)) {
-				linkedViews.push(viewName);
+
+			// Save the view to link later.
+			if ( !linkedViews.contains( viewName ) ) {
+				linkedViews.push( viewName );
 			}
 		}
-		
-		//Listener function priorities
-		//============================
-		
+
+		// Listener function priorities
+		// ============================
+
 		final knownPriorities : Map<String, Expr> = new Map();
 
-		final updateListeners : Array<ListenerFunction> = 
-		fields.map(
+		final updateListeners : Array<ListenerFunction> = fields.map(
 			ListenerFunction.fromField.bind(
 				_,
 				UPDATE_META,
@@ -231,441 +232,433 @@ class SystemBuilder {
 				macro world
 			)
 		).filter( notNull );
-		for(listener in addListeners.concat(removeListeners)) {
-			if(listener.wrapperFunction == null) {
-				Context.error("An @:add or @:remove listener must take at least one component. (Optional arguments don't count.)", listener.pos);
+		for ( listener in addListeners.concat( removeListeners ) ) {
+			if ( listener.wrapperFunction == null ) {
+				Context.error( "An @:add or @:remove listener must take at least one component. (Optional arguments don't count.)", listener.pos );
 			}
 		}
-		
+
 		/**
 		 * Update listeners that have `@:priority` tags. Each group of these
 		 * will be used to create a `ChildSystem`.
 		 */
-		final fixedPriorityUpdateListeners:Map<String, Array<ListenerFunction>> = new Map();
-		for(listener in updateListeners) {
-			if(listener.priority != null) {
-				if(!fixedPriorityUpdateListeners.exists(listener.priority)) {
+		final fixedPriorityUpdateListeners : Map<String, Array<ListenerFunction>> = new Map();
+		for ( listener in updateListeners ) {
+			if ( listener.priority != null ) {
+				if ( !fixedPriorityUpdateListeners.exists( listener.priority ) ) {
 					fixedPriorityUpdateListeners[listener.priority] = [];
 				}
-				
-				fixedPriorityUpdateListeners[listener.priority].push(listener);
+
+				fixedPriorityUpdateListeners[listener.priority].push( listener );
 			}
 		}
-		
-		final defaultPriority:Null<String> = getPriority(classType.meta.get(), knownPriorities);
-		if(defaultPriority != null) {
-			fields.pushFields(macro class DefaultPriority {
-				private override function __getDefaultPriority__():Int {
-					return ${ knownPriorities.get(defaultPriority) };
+
+		final defaultPriority : Null<String> = getPriority( classType.meta.get(), knownPriorities );
+		if ( defaultPriority != null ) {
+			fields.pushFields( macro class DefaultPriority {
+				private override function __getDefaultPriority__() : Int {
+					return ${knownPriorities.get( defaultPriority )};
 				}
-			});
+			} );
 		}
-		
-		//Constructor
-		//===========
-		
-		final initializeChildren:Array<Expr> = [for(priority => listeners in fixedPriorityUpdateListeners) {
-			final body:Array<Expr> = [for(listener in listeners) listener.callDuringUpdate(macro world)];
-			body.unshift(macro __dt__ = dt);
-			
-			macro __addListenersWithPriority__(${ knownPriorities[priority] }, function(dt:Float) $b{ body });
+
+		// Constructor
+		// ===========
+
+		final initializeChildren : Array<Expr> = [for ( priority => listeners in fixedPriorityUpdateListeners ) {
+			final body : Array<Expr> = [for ( listener in listeners ) listener.callDuringUpdate( macro world )];
+			body.unshift( macro __dt__ = dt );
+
+			macro __addListenersWithPriority__( ${knownPriorities[priority]}, function ( dt : Float ) $b{body} );
 		}];
-		initializeChildren.push(macro if(parent != null) {
-			for(child in __children__) {
-				parent.add(child);
+		initializeChildren.push( macro if ( parent != null ) {
+			for ( child in __children__ ) {
+				parent.add( child );
 			}
-		});
-		
-		switch(fields.find(field -> field.name == "new" || field.name == "_new")) {
+		} );
+
+		switch ( fields.find( field -> field.name == "new" || field.name == "_new" ) ) {
 			case null:
-				//No constructor found; declare a new one.
-				fields.push((macro class Constructor {
-					public inline function new(world:echoes.World, ?priority:Int) {
-						super(world, priority);
-						
-						$b{ initializeChildren }
+				// No constructor found; declare a new one.
+				fields.push(( macro class Constructor {
+					public inline function new( world : echoes.World, ?priority : Int ) {
+						super( world, priority );
+
+						$b{initializeChildren}
 					}
-				}).fields[0]);
-			case _.getFunctionBody() => body if(body != null):
-				if(!body.exists(e -> e.expr.match(
-					ECall(_.expr => EConst(CIdent("super")), _)))) {
-						body.push(macro super(world));
+				} ).fields[0] );
+			case _.getFunctionBody() => body if ( body != null ):
+				if ( !body.exists( e -> e.expr.match(
+					ECall( _.expr => EConst( CIdent( "super" ) ), _ ) ) ) ) {
+					body.push( macro super( world ) );
 				}
-				
-				for(expr in initializeChildren) {
-					body.push(expr);
+
+				for ( expr in initializeChildren ) {
+					body.push( expr );
 				}
 			default:
-				//Allow Haxe to throw an error.
+				// Allow Haxe to throw an error.
 		}
-		
-		//Listener wrappers and linked views
-		//==================================
-		
-		//Add and remove listeners require wrapper functions.
-		for(listener in addListeners.concat(removeListeners)) {
-			if(listener.components.length > 0) {
-				if(!fields.exists(field -> field.name == listener.wrapperName))
-					fields.push(listener.wrapperFunction);
-				
-				if(!linkedViews.contains(listener.viewName))
-					linkedViews.push(listener.viewName);
+
+		// Listener wrappers and linked views
+		// ==================================
+
+		// Add and remove listeners require wrapper functions.
+		for ( listener in addListeners.concat( removeListeners ) ) {
+			if ( listener.components.length > 0 ) {
+				if ( !fields.exists( field -> field.name == listener.wrapperName ) )
+					fields.push( listener.wrapperFunction );
+
+				if ( !linkedViews.contains( listener.viewName ) )
+					linkedViews.push( listener.viewName );
 			}
 		}
-		
-		//Update listeners use `forEachEntityInView()`, with no wrapper.
-		for(listener in updateListeners) {
-			if(listener.components.length > 0 && !linkedViews.contains(listener.viewName)) {
-				linkedViews.push(listener.viewName);
+
+		// Update listeners use `forEachEntityInView()`, with no wrapper.
+		for ( listener in updateListeners ) {
+			if ( listener.components.length > 0 && !linkedViews.contains( listener.viewName ) ) {
+				linkedViews.push( listener.viewName );
 			}
 		}
-		
-		//New functions
-		//=============
-		
-		//Add useful functions if they aren't already there.
-		fields.pushFields(macro class OptionalFields {
-			public override function toString():String {
-				return $v{ nameWithParams };
+
+		// New functions
+		// =============
+
+		// Add useful functions if they aren't already there.
+		fields.pushFields( macro class OptionalFields {
+			public override function toString() : String {
+				return $v{nameWithParams};
 			}
-		});
-		
-		//Add lifecycle functions no matter what.
-		final requiredFields:TypeDefinition = macro class RequiredFields {
-			private override function __activate__():Void {
-				if(!active) {
-					$b{[for ( view in linkedViews ) {
-						macro {
-							world.getOrCreateView( $v{view}, $i{view} ).activate();
-					}}]}
-					
-					$b{ addListeners.map(listener -> macro cast ((cast (${ listener.view })).onAdded, echoes.utils.Signal<Dynamic>).push(${ listener.wrapper })) }
-					$b{ removeListeners.map(listener -> macro cast ((cast ${ listener.view }).onRemoved, echoes.utils.Signal<Dynamic>).push(${ listener.wrapper })) }
-					
-					super.__activate__();
-					
-					//If any entities already exist, call the `@:add` listeners.
-					$b{ addListeners.map(listener -> listener.callDuringUpdate(macro world)) }
+		} );
+
+		// Add lifecycle functions no matter what.
+		final requiredFields : TypeDefinition = macro class RequiredFields {
+			private override function __activate__() : Void {
+				if ( !active ) {
+					$b{
+						[for ( view in linkedViews ) {
+							macro {
+								world.getOrCreateView( $v{view}, $i{view} ).activate();
+							}}]
+					}
+
+					$b{addListeners.map( listener -> macro cast(( cast( ${listener.view} ) ).onAdded,
+						echoes.utils.Signal<Dynamic> ).push( ${listener.wrapper} ) )} $b{removeListeners.map( listener ->
+						macro cast(( cast ${listener.view} ).onRemoved,
+							echoes.utils.Signal<Dynamic> ).push( ${listener.wrapper} ) )} super.__activate__();
+
+					// If any entities already exist, call the `@:add` listeners.
+					$b{addListeners.map( listener -> listener.callDuringUpdate( macro world ) )}
 				};
 			}
-			
-			private override function __deactivate__():Void {
-				if(active) {
-					$b{[for ( view in linkedViews ) macro world.getOrCreateView( $v{view}, $i{view} ).deactivate()]}
-					
-					$b{ addListeners.map(listener -> macro cast ((cast ${ listener.view }).onAdded, echoes.utils.Signal<Dynamic>).remove(${ listener.wrapper })) }
-					$b{ removeListeners.map(listener -> macro cast ((cast ${ listener.view }).onRemoved, echoes.utils.Signal<Dynamic>).remove(${ listener.wrapper })) }
-					
-					super.__deactivate__();
+
+			private override function __deactivate__() : Void {
+				if ( active ) {
+					$b{[for ( view in linkedViews )
+						macro world.getOrCreateView( $v{view}, $i{view} ).deactivate()]} $b{addListeners.map( listener ->
+						macro cast(( cast ${listener.view} ).onAdded,
+							echoes.utils.Signal<Dynamic> ).remove( ${listener.wrapper} ) )} $b{removeListeners.map( listener ->
+						macro cast(( cast ${listener.view} ).onRemoved,
+							echoes.utils.Signal<Dynamic> ).remove( ${listener.wrapper} ) )} super.__deactivate__();
+
 				}
 			}
-			
-			private override function __update__(dt:Float):Void {
+
+			private override function __update__( dt : Float ) : Void {
 				#if echoes_profiling
 				final __timestamp__ = Date.now().getTime();
 				#end
-				
-				${ if(parentTypes.length <= 2) {
-					macro __dt__ = dt;
-				} else {
-					macro super.__update__(dt);
-				} }
-				
-				$b{ {
-					[for(listener in updateListeners) if(listener.priority == null)
-						listener.callDuringUpdate(macro world)];
-				} }
-				
-				/* ${ {
-					expr: ESwitch(macro priority, [for(priority in childPriorities)
-						{
-							values: [macro $v{ priority }],
-							expr: macro $b{
-								[for(listener in updateListeners) if(listener.priority == priority)
-									listener.callDuringUpdate()]
-							}
-						}
-					], null),
-					pos: (macro null).pos
-				} } */
-				
+
+				${
+					if ( parentTypes.length <= 2 ) {
+						macro __dt__ = dt;
+					} else {
+						macro super.__update__( dt );
+					}
+				}
+
+				$b{
+					{
+						[for ( listener in updateListeners ) if ( listener.priority == null )
+							listener.callDuringUpdate( macro world )];
+					}
+				}
+
 				#if echoes_profiling
-				this.__updateTime__ = Std.int(Date.now().getTime() - __timestamp__);
+				this.__updateTime__ = Std.int( Date.now().getTime() - __timestamp__ );
 				#end
 			}
 		};
-		//Put the required fields first so that Haxe will highlight the user's
-		//fields in case of a conflict.
-		fields = requiredFields.fields.concat(fields);
-		
+		// Put the required fields first so that Haxe will highlight the user's
+		// fields in case of a conflict.
+		fields = requiredFields.fields.concat( fields );
+
 		return fields;
 	}
-	
-	public static function genericBuild():ComplexType {
-		var classType:ClassType;
-		var name:String;
-		switch(Context.getLocalType()) {
-			case TInst(_.get() => inst, args):
+
+	public static function genericBuild() : ComplexType {
+		var classType : ClassType;
+		var name : String;
+		switch ( Context.getLocalType() ) {
+			case TInst( _.get() => inst, args ):
 				classType = inst;
 				name = inst.name;
-				
-				TypeSubstitutions.applyDefaultTypeParams(classType, args);
-				for(i => arg in args) {
-					name += "_" + arg.toComplexType().toIdentifier(false);
+
+				TypeSubstitutions.applyDefaultTypeParams( classType, args );
+				for ( i => arg in args ) {
+					name += "_" + arg.toComplexType().toIdentifier( false );
 				}
 			default:
-				return Context.fatalError("SystemBuilder only acts on classes.", Context.currentPos());
+				return Context.fatalError( "SystemBuilder only acts on classes.", Context.currentPos() );
 		}
-		
-		final qualifiedName:String = classType.pack.concat([name]).join(".");
-		if(genericSystemCache.exists(qualifiedName)) {
+
+		final qualifiedName : String = classType.pack.concat( [name] ).join( "." );
+		if ( genericSystemCache.exists( qualifiedName ) ) {
 			return genericSystemCache[qualifiedName];
 		}
-		
-		if(classType.superClass == null) {
-			return Context.fatalError(classType.name + " must extend System.", Context.currentPos());
+
+		if ( classType.superClass == null ) {
+			return Context.fatalError( classType.name + " must extend System.", Context.currentPos() );
 		}
-		
-		final superClass:ClassType = classType.superClass.t.get();
-		final superClassModule:String = superClass.module.split(".").pop();
-		final importsAndUsings:{ imports: Array<ImportExpr>, usings: Array<TypePath> }
-			= TypeSubstitutions.getCachedImports(classType);
-		
-		Context.defineModule(qualifiedName, [{
-			pack: classType.pack,
-			fields: buildInternal(true),
-			kind: TDClass({
-				pack: superClass.pack,
-				name: superClassModule,
-				sub: superClassModule != superClass.name ? superClass.name : null
-			}, null, null, null, null),
-			pos: Context.currentPos(),
-			name: name,
-			meta: [{
-				//In case the `@:autoBuild` macro runs on the output.
-				name: ":skipBuildMacro",
-				pos: Context.currentPos()
+
+		final superClass : ClassType = classType.superClass.t.get();
+		final superClassModule : String = superClass.module.split( "." ).pop();
+		final importsAndUsings : { imports : Array<ImportExpr>, usings : Array<TypePath> } = TypeSubstitutions.getCachedImports( classType );
+
+		Context.defineModule( qualifiedName, [{
+			pack : classType.pack,
+			fields : buildInternal( true ),
+			kind : TDClass( {
+				pack : superClass.pack,
+				name : superClassModule,
+				sub : superClassModule != superClass.name ? superClass.name : null
+			}, null, null, null, null ),
+			pos : Context.currentPos(),
+			name : name,
+			meta : [{
+				// In case the `@:autoBuild` macro runs on the output.
+				name : ":skipBuildMacro",
+				pos : Context.currentPos()
 			}]
-		}], importsAndUsings.imports, importsAndUsings.usings);
-		
-		final type:ComplexType = TPath({
-			pack: classType.pack,
-			name: name
-		});
+		}], importsAndUsings.imports, importsAndUsings.usings );
+
+		final type : ComplexType = TPath( {
+			pack : classType.pack,
+			name : name
+		} );
 		genericSystemCache[qualifiedName] = type;
 		return type;
 	}
 }
 
 @:noCompletion typedef ListenerFunctionData = {
-	name:String,
-	args:Array<FunctionArg>,
-	pos:Position,
-	priority:Null<String>,
-	world:ExprOf<World>,
-	?components:Array<ComplexType>,
-	?optionalComponents:Array<ComplexType>,
-	?viewName:String,
-	?wrapperFunction:Field
+	name : String,
+	args : Array<FunctionArg>,
+	pos : Position,
+	priority : Null<String>,
+	world : ExprOf<World>,
+	?components : Array<ComplexType>,
+	?optionalComponents : Array<ComplexType>,
+	?viewName : String,
+	?wrapperFunction : Field
 };
 
 @:forward
-abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
+abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
+
 	public static function fromField(
-		field:Field, 
-		listenerType:String, 
-		knownPriorities:Map<String, Expr>,
+		field : Field,
+		listenerType : String,
+		knownPriorities : Map<String, Expr>,
 		world : ExprOf<World>
-	):ListenerFunction {
-		switch(field.kind) {
-			case FFun(func):
-				if(SystemBuilder.getMeta(field.meta, listenerType) == null) {
+	) : ListenerFunction {
+		switch ( field.kind ) {
+			case FFun( func ):
+				if ( SystemBuilder.getMeta( field.meta, listenerType ) == null ) {
 					return null;
 				}
-				
-				//Check for duplicates. `ViewBuilder` will also check this
-				//later, but its error message would be less specific.
-				final argTypes:Array<String> = [for(arg in func.args) arg.type != null
-					? new Printer().printComplexType(arg.type.followComplexType())
-					: Context.error('${ arg.name } requires a type.', field.pos)];
-				for(i in 0...argTypes.length) {
-					for(j in 0...i) {
-						if(argTypes[i] == argTypes[j]) {
-							Context.error('${ func.args[j].name } and ${ func.args[i].name } both have type ${ argTypes[i] }.', field.pos);
+
+				// Check for duplicates. `ViewBuilder` will also check this
+				// later, but its error message would be less specific.
+				final argTypes : Array<String> = [for ( arg in func.args )
+					arg.type != null ? new Printer().printComplexType( arg.type.followComplexType() ) : Context.error( '${arg.name} requires a type.', field.pos )];
+				for ( i in 0...argTypes.length ) {
+					for ( j in 0...i ) {
+						if ( argTypes[i] == argTypes[j] ) {
+							Context.error( '${func.args[j].name} and ${func.args[i].name} both have type ${argTypes[i]}.', field.pos );
 						}
 					}
 				}
-				
+
 				return {
-					name: field.name,
-					args: func.args,
-					pos: field.pos,
-					priority: SystemBuilder.getPriority(field.meta, knownPriorities),
+					name : field.name,
+					args : func.args,
+					pos : field.pos,
+					priority : SystemBuilder.getPriority( field.meta, knownPriorities ),
 					world : world
 				};
 			default:
 				return null;
 		}
 	}
-	
-	public var components(get, never):Array<ComplexType>;
-	private function get_components():Array<ComplexType> {
-		if(this.components == null) {
+
+	public var components( get, never ) : Array<ComplexType>;
+	private function get_components() : Array<ComplexType> {
+		if ( this.components == null ) {
 			this.components = [];
-			
-			//Find non-optional, non-reserved arguments.
-			for(arg in this.args) {
-				switch(arg.type.followComplexType()) {
-					case macro:StdTypes.Float, macro:echoes.Entity:
-					case type if(!arg.opt && arg.value == null):
-						this.components.push(type);
+
+			// Find non-optional, non-reserved arguments.
+			for ( arg in this.args ) {
+				switch ( arg.type.followComplexType() ) {
+					case macro : StdTypes.Float, macro : echoes.Entity:
+					case type if ( !arg.opt && arg.value == null ):
+						this.components.push( type );
 					default:
 				}
 			}
-			
-			if(this.components.length > 0) {
-				//Make sure the `View` subclass gets built.
-				ViewBuilder.getComponentOrder(this.components);
+
+			if ( this.components.length > 0 ) {
+				// Make sure the `View` subclass gets built.
+				ViewBuilder.getComponentOrder( this.components );
 			}
 		}
-		
+
 		return this.components;
 	}
-	
-	public var optionalComponents(get, never):Array<ComplexType>;
-	private function get_optionalComponents():Array<ComplexType> {
-		if(this.optionalComponents == null) {
+
+	public var optionalComponents( get, never ) : Array<ComplexType>;
+	private function get_optionalComponents() : Array<ComplexType> {
+		if ( this.optionalComponents == null ) {
 			this.optionalComponents = [];
-			
-			//Find optional, non-reserved arguments.
-			for(arg in this.args) {
-				switch(arg.type.followComplexType()) {
-					case macro:StdTypes.Float, macro:echoes.Entity:
-					case type if(arg.opt || arg.value != null):
-						this.optionalComponents.push(type);
+
+			// Find optional, non-reserved arguments.
+			for ( arg in this.args ) {
+				switch ( arg.type.followComplexType() ) {
+					case macro : StdTypes.Float, macro : echoes.Entity:
+					case type if ( arg.opt || arg.value != null ):
+						this.optionalComponents.push( type );
 					default:
 				}
 			}
 		}
-		
+
 		return this.optionalComponents;
 	}
-	
-	public var view(get, never):Expr;
-	private inline function get_view():Expr {
-		return macro world.getOrCreateView($v{ viewName }, $i{viewName});
+
+	public var view( get, never ) : Expr;
+	private inline function get_view() : Expr {
+		return macro world.getOrCreateView( $v{viewName}, $i{viewName} );
 	}
-	
-	public var viewName(get, never):String;
-	private function get_viewName():String {
-		if(this.viewName == null) {
+
+	public var viewName( get, never ) : String;
+	private function get_viewName() : String {
+		if ( this.viewName == null ) {
 			this.viewName = components.getViewName();
 		}
 		return this.viewName;
 	}
-	
-	public var wrapper(get, never):Expr;
-	private inline function get_wrapper():Expr {
-		return macro $i{ wrapperName };
+
+	public var wrapper( get, never ) : Expr;
+	private inline function get_wrapper() : Expr {
+		return macro $i{wrapperName};
 	}
-	
-	public var wrapperName(get, never):String;
-	private inline function get_wrapperName():String {
-		return '__${ this.name }_bridge__';
+
+	public var wrapperName( get, never ) : String;
+	private inline function get_wrapperName() : String {
+		return '__${this.name}_bridge__';
 	}
-	
+
 	/**
 	 * A wrapper function for this. This wrapper can safely be passed to
 	 * `view.onAdded` and/or `view.onRemoved`.
 	 */
-	public var wrapperFunction(get, never):Field;
-	private function get_wrapperFunction():Field {
-		if(this.wrapperFunction == null) {
-			if(components.length == 0) {
+	public var wrapperFunction( get, never ) : Field;
+	private function get_wrapperFunction() : Field {
+		if ( this.wrapperFunction == null ) {
+			if ( components.length == 0 ) {
 				return null;
 			}
-			
-			//The arguments used in the wrapper function signature.
-			final args:Array<FunctionArg> =
-				//The view always passes an `Entity` as the first argument.
-				[{ name: "entity", type: macro:echoes.Entity }]
-				//The remaining arguments must also be in the view's order.
-				.concat(ViewBuilder.getComponentOrder(components)
-					//Make sure to use the same names as the listener function.
-					.map(type -> {
-						name: this.args.find(arg -> arg.type.followName() == type.followName()).name,
-						type: type
-					}));
-			for(arg in args) {
-				if(arg.name == null) {
-					Context.error('Could not locate an argument of type ${arg.type.followName()}. Please report this error, and include information about the type.', this.pos);
+
+			// The arguments used in the wrapper function signature.
+			final args : Array<FunctionArg> = // The view always passes an `Entity` as the first argument.
+				[{ name : "entity", type : macro : echoes.Entity }] // The remaining arguments must also be in the view's order.
+				.concat( ViewBuilder.getComponentOrder( components )
+					// Make sure to use the same names as the listener function.
+					.map( type -> {
+						name : this.args.find( arg -> arg.type.followName() == type.followName() ).name,
+						type : type
+					} ) );
+			for ( arg in args ) {
+				if ( arg.name == null ) {
+					Context.error( 'Could not locate an argument of type ${arg.type.followName()}. Please report this error, and include information about the type.', this.pos );
 				}
 			}
-			
+
 			this.wrapperFunction = {
-				name: wrapperName,
-				kind: FFun({
-					args: args,
-					ret: macro:Void,
-					expr: call(macro entity, macro __dt__, macro world)
-				}),
-				pos: this.pos
+				name : wrapperName,
+				kind : FFun( {
+					args : args,
+					ret : macro : Void,
+					expr : call( macro entity, macro __dt__, macro world )
+				} ),
+				pos : this.pos
 			};
 		}
-		
+
 		return this.wrapperFunction;
 	}
-	
+
 	/**
 	 * Calls this listener. The returned expression will refer to `__dt__`,
 	 * `entity`, and any required components, so it's important to ensure all of
 	 * these values are available in the current context.
 	 */
-	private function call(getEntity:Expr, getDeltaTime:Expr, worldExpr: ExprOf<World>):Expr {
-		final args:Array<Expr> = [for(arg in this.args) {
-			switch(arg.type.followComplexType()) {
-				case macro:StdTypes.Float:
-					//Defined as a private variable of `System`.
+	private function call( getEntity : Expr, getDeltaTime : Expr, worldExpr : ExprOf<World> ) : Expr {
+		final args : Array<Expr> = [for ( arg in this.args ) {
+			switch ( arg.type.followComplexType() ) {
+				case macro : StdTypes.Float:
+					// Defined as a private variable of `System`.
 					getDeltaTime;
-				case macro:echoes.Entity:
-					//Defined as a wrapper function's first argument, and also
-					//defined in `callDuringUpdate()`.
+				case macro : echoes.Entity:
+					// Defined as a wrapper function's first argument, and also
+					// defined in `callDuringUpdate()`.
 					getEntity;
 				default:
-					if(arg.opt || arg.value != null) {
-						//Look up the optional component's value. (May be null
-						//and that's fine.)
-						EntityTools.get(getEntity, worldExpr, arg.type.followComplexType());
+					if ( arg.opt || arg.value != null ) {
+						// Look up the optional component's value. (May be null
+						// and that's fine.)
+						EntityTools.get( getEntity, worldExpr, arg.type.followComplexType() );
 					} else {
-						//Defined as one of the wrapper function's arguments.
-						macro $i{ arg.name };
+						// Defined as one of the wrapper function's arguments.
+						macro $i{arg.name};
 					}
 			}
 		}];
-		
-		return macro @:pos(this.pos) $i{ this.name }($a{ args });
+
+		return macro @:pos( this.pos ) $i{this.name}( $a{args} );
 	}
-	
+
 	/**
 	 * Calls this listener one or more times as part of an `@:update` step.
 	 */
-	public function callDuringUpdate(world : ExprOf<World>):Expr {
-		if(components.length > 0) {
-			return ViewBuilder.forEachEntityInView(macro @:pos(this.pos) $i{ this.name }, this.args, macro __dt__, macro world);
-		} else if(optionalComponents.length > 0) {
-			return macro for(entity in world.activeEntities)
-				${ call(macro entity, macro __dt__, macro world) };
+	public function callDuringUpdate( world : ExprOf<World> ) : Expr {
+		if ( components.length > 0 ) {
+			return
+				ViewBuilder.forEachEntityInView( macro @:pos( this.pos ) $i{this.name}, this.args, macro __dt__, macro world );
+		} else if ( optionalComponents.length > 0 ) {
+			return macro for ( entity in world.activeEntities )
+				${call( macro entity, macro __dt__, macro world )};
 		} else {
-			//No components to filter by, but there may still be an `Entity`
-			//argument. (And/or a `Float` argument, which isn't relevant.)
-			for(arg in this.args) {
-				if(arg.type.followComplexType().match(macro:echoes.Entity)) {
-					//Iterate over all entities.
-					return macro for(entity in world.activeEntities)
-						${ call(macro entity, macro __dt__, macro world) };
+			// No components to filter by, but there may still be an `Entity`
+			// argument. (And/or a `Float` argument, which isn't relevant.)
+			for ( arg in this.args ) {
+				if ( arg.type.followComplexType().match( macro : echoes.Entity ) ) {
+					// Iterate over all entities.
+					return macro for ( entity in world.activeEntities )
+						${call( macro entity, macro __dt__, macro world )};
 				}
 			}
-			
+
 			// Don't iterate over anything.
 			return call(
 				macro throw "Unable to select an entity because this function has no required components",
@@ -675,5 +668,4 @@ abstract ListenerFunction(ListenerFunctionData) from ListenerFunctionData {
 		}
 	}
 }
-
 #end

@@ -1,12 +1,10 @@
 package echoes.macro;
 
 #if macro
-
 import haxe.crypto.Md5;
 import haxe.macro.Expr;
 import haxe.macro.Printer;
 import haxe.macro.Type;
-
 import echoes.macro.ComponentStorageBuilder;
 import echoes.macro.MacroTools;
 import haxe.macro.ComplexTypeTools;
@@ -18,27 +16,27 @@ import Lambda;
 // using haxe.macro.ComplexTypeTools;
 // using haxe.macro.Context;
 // using Lambda;
-
 class ViewBuilder {
-	private static final viewCache:Map<String, { cls:ComplexType, components:Array<ComplexType>, type:Type }> = new Map();
-	
-	public static inline function isView(name:String):Bool {
-		return viewCache.exists(name);
+
+	private static final viewCache : Map<String, { cls : ComplexType, components : Array<ComplexType>, type : Type }> = new Map();
+
+	public static inline function isView( name : String ) : Bool {
+		return viewCache.exists( name );
 	}
-	
+
 	/**
 	 * Returns the canonical ordering of these components. (If such an ordering
 	 * hasn't been defined, the given order will become canonical.)
 	 */
-	public static function getComponentOrder(components:Array<ComplexType>):Array<ComplexType> {
-		final name:String = getViewName(components);
-		if(!viewCache.exists(name)) {
-			createViewType(components);
+	public static function getComponentOrder( components : Array<ComplexType> ) : Array<ComplexType> {
+		final name : String = getViewName( components );
+		if ( !viewCache.exists( name ) ) {
+			createViewType( components );
 		}
-		
+
 		return viewCache[name].components;
 	}
-	
+
 	/**
 	 * Returns the name of the `View` class corresponding to the given
 	 * components. Will return the same name regardless of component order.
@@ -48,74 +46,74 @@ class ViewBuilder {
 	 * will be limited to 80 characters in C++. To adjust this limit, use
 	 * `-Dechoes_max_name_length=[number]`.
 	 */
-	public static function getViewName(components:Array<ComplexType>):String {
-		//Use the fully-qualified component names to generate a unique hash.
-		final md5:String = "_" + Md5.encode(joinNames(components)).substr(0, 5);
-		
-		//Use the unqualified component names for the final result, as they're
-		//easier to read. Include part of the hash to avoid collisions.
-		final name:String = "ViewOf_" + joinNames(components, false) + md5;
-		
-		if(Context.defined("cpp")) {
-			var maxLength:Null<Int> = null;
-			if(Context.defined("echoes_max_name_length")) {
-				maxLength = Std.parseInt(Context.definedValue("echoes_max_name_length"));
+	public static function getViewName( components : Array<ComplexType> ) : String {
+		// Use the fully-qualified component names to generate a unique hash.
+		final md5 : String = "_" + Md5.encode( joinNames( components ) ).substr( 0, 5 );
+
+		// Use the unqualified component names for the final result, as they're
+		// easier to read. Include part of the hash to avoid collisions.
+		final name : String = "ViewOf_" + joinNames( components, false ) + md5;
+
+		if ( Context.defined( "cpp" ) ) {
+			var maxLength : Null<Int> = null;
+			if ( Context.defined( "echoes_max_name_length" ) ) {
+				maxLength = Std.parseInt( Context.definedValue( "echoes_max_name_length" ) );
 			}
-			if(maxLength == null) maxLength = 80;
-			
-			if(name.length > maxLength) {
-				return name.substr(0, maxLength - md5.length) + md5;
+			if ( maxLength == null ) maxLength = 80;
+
+			if ( name.length > maxLength ) {
+				return name.substr( 0, maxLength - md5.length ) + md5;
 			}
 		}
-		
+
 		return name;
 	}
-	
-	private static function joinNames(types:Array<ComplexType>, ?qualify:Bool = true):String {
-		final typeNames:Array<String> = [for(type in types) MacroTools.toIdentifier(type, qualify)];
-		typeNames.sort(MacroTools.compareStrings);
-		return typeNames.join("_");
+
+	private static function joinNames( types : Array<ComplexType>, ?qualify : Bool = true ) : String {
+		final typeNames : Array<String> = [for ( type in types ) MacroTools.toIdentifier( type, qualify )];
+		typeNames.sort( MacroTools.compareStrings );
+		return typeNames.join( "_" );
 	}
-	
-	public static function build():Type {
-		switch(Context.getLocalType()) {
-			case TInst(_, types) if(types != null && types.length > 0):
-				return createViewType([for(type in types)
-					Context.toComplexType(MacroTools.followMono(type))]);
+
+	public static function build() : Type {
+		switch ( Context.getLocalType() ) {
+			case TInst( _, types ) if ( types != null && types.length > 0 ):
+				return createViewType( [for ( type in types )
+					Context.toComplexType( MacroTools.followMono( type ) )] );
 			default:
-				Context.error("Expected one or more type parameters.", Context.currentPos());
+				Context.error( "Expected one or more type parameters.", Context.currentPos() );
 				return null;
 		}
 	}
-	
-	public static function createViewType(components:Array<ComplexType>):Type {
+
+	public static function createViewType( components : Array<ComplexType> ) : Type {
 		// for ( comp in components ) trace( util.Macros.formatExpr( comp ) );
-		final viewClassName:String = getViewName(components);
-		
-		if(viewCache.exists(viewClassName)) {
+		final viewClassName : String = getViewName( components );
+
+		if ( viewCache.exists( viewClassName ) ) {
 			return viewCache[viewClassName].type;
 		}
-		
-		//Check for duplicate components.
-		components.map(MacroTools.followName).sort(function(a:String, b:String):Int {
-			final diff:Int = MacroTools.compareStrings(a, b);
-			if(diff == 0) {
-				Context.error('More than one component of type $a.', Context.currentPos());
+
+		// Check for duplicate components.
+		components.map( MacroTools.followName ).sort( function ( a : String, b : String ) : Int {
+			final diff : Int = MacroTools.compareStrings( a, b );
+			if ( diff == 0 ) {
+				Context.error( 'More than one component of type $a.', Context.currentPos() );
 			}
 			return diff;
-		});
-		
-		final viewTypePath:TypePath = { pack: [], name: viewClassName };
-		final viewComplexType:ComplexType = TPath(viewTypePath);
-		
+		} );
+
+		final viewTypePath : TypePath = { pack : [], name : viewClassName };
+		final viewComplexType : ComplexType = TPath( viewTypePath );
+
 		/**
 		 * The function signature for any event listeners attached to this view.
 		 * Includes `Entity` as the first argument, meaning that in a
 		 * `View<Hue, Saturation>`, listeners would need to have the signature
 		 * `(Entity, Hue, Saturation) -> Void`.
 		 */
-		final callbackType:ComplexType = TFunction([macro:echoes.Entity].concat(components), macro:Void);
-		
+		final callbackType : ComplexType = TFunction( [macro : echoes.Entity].concat( components ), macro : Void );
+
 		/**
 		 * The arguments required to dispatch an add or update event. In a
 		 * `View<Hue, Saturation>`, the callback should look like this:
@@ -125,9 +123,9 @@ class ViewBuilder {
 		 *     SaturationContainer.instance.get(entity));
 		 * ```
 		 */
-		final callbackArgs:Array<Expr> = [for(component in components)
-			macro ${ComponentStorageBuilder.getComponentStorage(macro world, component)}.get(entity)];
-		
+		final callbackArgs : Array<Expr> = [for ( component in components )
+			macro ${ComponentStorageBuilder.getComponentStorage( macro world, component )}.get( entity )];
+
 		/**
 		 * The arguments required to dispatch a remove event. Unlike with
 		 * `callbackArgs`, one of the components will already have been removed
@@ -148,122 +146,126 @@ class ViewBuilder {
 		 * may sound inefficient, in practice many (if not most) views will only
 		 * run the loop for 0-1 iterations.
 		 */
-		final removedCallbackArgs:Array<Expr> = [for(component in components) {
-			final inst:Expr = macro ${ComponentStorageBuilder.getComponentStorage(macro world, component)};
-			macro $inst == removedComponentStorage ? removedComponent : $inst.get(entity);
+		final removedCallbackArgs : Array<Expr> = [for ( component in components ) {
+			final inst : Expr = macro ${ComponentStorageBuilder.getComponentStorage( macro world, component )};
+			macro $inst == removedComponentStorage ? removedComponent : $inst.get( entity );
 		}];
-		
-		//Pass `entity` as the first argument to both.
-		callbackArgs.unshift(macro entity);
-		removedCallbackArgs.unshift(macro entity);
-		
+
+		// Pass `entity` as the first argument to both.
+		callbackArgs.unshift( macro entity );
+		removedCallbackArgs.unshift( macro entity );
+
 		// trace(viewTypePath);
-		
-		final def:TypeDefinition = macro class $viewClassName extends echoes.View.ViewBase {
+
+		final def : TypeDefinition = macro class $viewClassName extends echoes.View.ViewBase {
 			// public static final instance:$viewComplexType = new $viewTypePath();
-			
+
 			public final onAdded = new echoes.utils.Signal<$callbackType>();
+
 			public final onRemoved = new echoes.utils.Signal<$callbackType>();
 
-			private function new(world : echoes.World) {
-				world.addView($v{viewClassName}, this);
+			private function new( world : echoes.World ) {
+				world.addView( $v{viewClassName}, this );
 
 				super(
 					world,
-					$a{{
-						[for ( component in components )
-							macro ${ ComponentStorageBuilder.getComponentStorage( macro world, component ) }
-						];
-					}}
+					$a{
+						{
+							[for ( component in components )
+								macro ${ComponentStorageBuilder.getComponentStorage( macro world, component )}
+							];
+						}}
 				);
 			}
-			
-			private override function dispatchAddedCallback(entity:echoes.Entity):Void {
-				var index:Int = entities.lastIndexOf(entity);
-				for(callback in onAdded) {
-					callback($a{ callbackArgs });
-					
-					//If the callback removed the entity, stop. Cache the index
-					//to save time in most cases. HashLink is known to return 0
-					//when reading out of bounds, so it has to check length too.
-					if(${ Context.defined("hl") ? macro index >= entities.length : macro false }
-						|| entities[index] != entity) {
-						index = entities.lastIndexOf(entity);
-						if(index < 0) {
+
+			private override function dispatchAddedCallback( entity : echoes.Entity ) : Void {
+				var index : Int = entities.lastIndexOf( entity );
+				for ( callback in onAdded ) {
+					callback( $a{callbackArgs} );
+
+					// If the callback removed the entity, stop. Cache the index
+					// to save time in most cases. HashLink is known to return 0
+					// when reading out of bounds, so it has to check length too.
+					if ( ${Context.defined( "hl" ) ? macro index >= entities.length : macro false}
+						|| entities[index] != entity ) {
+						index = entities.lastIndexOf( entity );
+						if ( index < 0 ) {
 							break;
 						}
 					}
 				}
 			}
-			
-			private override function dispatchRemovedCallback(entity:echoes.Entity, ?removedComponentStorage:echoes.ComponentStorage.DynamicComponentStorage, ?removedComponent:Any):Void {
-				var exception:haxe.Exception = null;
-				for(callback in onRemoved) {
+
+			private override function dispatchRemovedCallback( entity : echoes.Entity, ?removedComponentStorage : echoes.ComponentStorage.DynamicComponentStorage, ?removedComponent : Any ) : Void {
+				var exception : haxe.Exception = null;
+				for ( callback in onRemoved ) {
 					try {
-						callback($a{ removedCallbackArgs });
-					} catch(e:haxe.Exception) {
+						callback( $a{removedCallbackArgs} );
+					} catch( e : haxe.Exception ) {
 						exception = e;
 					}
 				}
-				
-				if(exception != null) {
+
+				if ( exception != null ) {
 					throw exception;
 				}
 			}
-			
-			private override function reset():Void {
+
+			private override function reset() : Void {
 				super.reset();
 				onAdded.clear();
 				onRemoved.clear();
 			}
-			
-			public function iter(callback:$callbackType):Void {
-				${ {
-					final args = [for(i => component in components)
-						{ name: "component" + i, type: component }];
-					args.unshift({ name: "entity", type: macro:echoes.Entity });
-					forEachEntityInView(macro callback, args, macro 0, macro world);
-				} }
+
+			public function iter( callback : $callbackType ) : Void {
+				${
+					{
+						final args = [for ( i => component in components )
+							{ name : "component" + i, type : component }];
+						args.unshift( { name : "entity", type : macro : echoes.Entity } );
+						forEachEntityInView( macro callback, args, macro 0, macro world );
+					}
+				}
 			}
 		}
-		
-		Context.defineType(def);
-		
-		final viewType:Type = ComplexTypeTools.toType(viewComplexType);
-		viewCache.set(viewClassName, { cls: viewComplexType, components: components, type: viewType });
-		
-		Report.viewNames.push(viewClassName);
-		
+
+		Context.defineType( def );
+
+		final viewType : Type = ComplexTypeTools.toType( viewComplexType );
+		viewCache.set( viewClassName, { cls : viewComplexType, components : components, type : viewType } );
+
+		Report.viewNames.push( viewClassName );
+
 		return viewType;
 	}
-	
-	public static function forEachEntityInView(func:Expr, args:Array<FunctionArg>, getDeltaTime:Expr, worldExpr:ExprOf<World>):Expr {
-		final requiredComponents:Array<ComplexType> = [];
-		final funcArgs:Array<Expr> = [for(arg in args) {
-			switch(MacroTools.followComplexType(arg.type)) {
-				case macro:StdTypes.Float:
+
+	public static function forEachEntityInView( func : Expr, args : Array<FunctionArg>, getDeltaTime : Expr, worldExpr : ExprOf<World> ) : Expr {
+		final requiredComponents : Array<ComplexType> = [];
+		final funcArgs : Array<Expr> = [for ( arg in args ) {
+			switch ( MacroTools.followComplexType( arg.type ) ) {
+				case macro : StdTypes.Float:
 					getDeltaTime;
-				case macro:echoes.Entity:
+				case macro : echoes.Entity:
 					macro entity;
 				case x:
-					if(!arg.opt && arg.value == null) {
-						requiredComponents.push(x);
+					if ( !arg.opt && arg.value == null ) {
+						requiredComponents.push( x );
 					}
-					macro ${ComponentStorageBuilder.getComponentStorage(macro world, x)}.get(entity);
+					macro ${ComponentStorageBuilder.getComponentStorage( macro world, x )}.get( entity );
 			}
 		}];
-		
-		var viewName= getViewName(requiredComponents);
-		
+
+		var viewName = getViewName( requiredComponents );
+
 		return macro {
-			var i:Int = 0;
-			final entities:haxe.ds.ReadOnlyArray<echoes.Entity> = world.getOrCreateView($v{viewName}, $i{viewName}).entities;
-			while(i < entities.length) {
-				final entity:echoes.Entity = entities[i];
-				$func($a{ funcArgs });
-				
-				if(entity != entities[i] && !entities.contains(entity)) {
-					//Entity was removed; don't increment.
+			var i : Int = 0;
+			final entities : haxe.ds.ReadOnlyArray<echoes.Entity> = world.getOrCreateView( $v{viewName}, $i{viewName} ).entities;
+			while ( i < entities.length ) {
+				final entity : echoes.Entity = entities[i];
+				$func( $a{funcArgs} );
+
+				if ( entity != entities[i] && !entities.contains( entity ) ) {
+					// Entity was removed; don't increment.
 				} else {
 					i++;
 				}
@@ -271,5 +273,4 @@ class ViewBuilder {
 		};
 	}
 }
-
 #end

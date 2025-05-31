@@ -1,7 +1,6 @@
 package echoes;
 
 import echoes.World.SystemDetails;
-
 import echoes.macro.ViewBuilder;
 import echoes.utils.Signal;
 import echoes.View;
@@ -65,29 +64,30 @@ import haxe.rtti.Meta;
  * `@:a`, `@:echoes_rem`, `@:echoes_u`, and several others are all valid.
  */
 #if !macro
-@:autoBuild(echoes.macro.SystemBuilder.build())
+@:autoBuild( echoes.macro.SystemBuilder.build() )
 #end
 class System {
+
 	#if echoes_profiling
-	@:noCompletion private var __updateTime__:Int = 0;
+	@:noCompletion private var __updateTime__ : Int = 0;
 	#end
-	
-	@:noCompletion private final __children__:Array<ChildSystem> = [];
-	
-	@:noCompletion private var __dt__:Float = 0;
-	
-	public var active(default, null):Bool = false;
-	
-	public final onActivate:Signal<() -> Void> = new Signal();
-	public final onDeactivate:Signal<() -> Void> = new Signal();
-	
+
+	@:noCompletion private final __children__ : Array<ChildSystem> = [];
+
+	@:noCompletion private var __dt__ : Float = 0;
+
+	public var active( default, null ) : Bool = false;
+
+	public final onActivate : Signal< () -> Void> = new Signal();
+	public final onDeactivate : Signal< () -> Void> = new Signal();
+
 	/**
 	 * The list directly containing this system, if any.
 	 */
-	public var parent(default, null):SystemList;
+	public var parent( default, null ) : SystemList;
 
 	final world : World;
-	
+
 	/**
 	 * This system's base priority, applying to any listener function that
 	 * doesn't have its own `@:priority` tag. This can be set via the
@@ -102,151 +102,151 @@ class System {
 	 * other systems of that priority. Even `system.priority = system.priority`
 	 * will affect the ordering.
 	 */
-	public var priority(default, set):Int;
-	private inline function set_priority(value:Int):Int {
+	public var priority( default, set ) : Int;
+	private inline function set_priority( value : Int ) : Int {
 		priority = value;
-		
-		if(parent != null) {
-			parent.__recalculateOrder__(this);
+
+		if ( parent != null ) {
+			parent.__recalculateOrder__( this );
 		}
-		
+
 		return priority;
 	}
-	
+
 	/**
 	 * @param priority This system's initial priority. If omitted, this will
 	 * default to the value set by `@:priority`, or 0 if that's omitted too.
 	 */
-	private inline function new(world : World, ?priority:Int) {
+	private inline function new( world : World, ?priority : Int ) {
 		this.world = world;
 		this.priority = priority != null ? priority : __getDefaultPriority__();
 	}
-	
-	@:allow(echoes.World)
-	private function __activate__():Void {
-		if(!active) {
+
+	@:allow( echoes.World )
+	private function __activate__() : Void {
+		if ( !active ) {
 			active = true;
 			__dt__ = 0;
-			
+
 			#if !macro
 			onActivate.dispatch();
 			#end
 		}
 	}
-	
+
 	@:noCompletion
-	private inline function __addListenersWithPriority__(priority:Int, runUpdateListeners:(Float) -> Void):Void {
-		__children__.push(new ChildSystem(world, this, priority, runUpdateListeners));
+	private inline function __addListenersWithPriority__( priority : Int, runUpdateListeners : ( Float ) -> Void ) : Void {
+		__children__.push( new ChildSystem( world, this, priority, runUpdateListeners ) );
 	}
-	
-	@:allow(echoes.World)
-	private function __deactivate__():Void {
-		if(active) {
+
+	@:allow( echoes.World )
+	private function __deactivate__() : Void {
+		if ( active ) {
 			active = false;
-			
+
 			#if !macro
 			onDeactivate.dispatch();
 			#end
 		}
 	}
-	
+
 	/**
 	 * Returns the value from the system's `@:priority` tag, if any.
 	 */
-	private function __getDefaultPriority__():Int {
+	private function __getDefaultPriority__() : Int {
 		return 0;
 	}
-	
-	@:allow(echoes.World)
-	private function __update__(dt:Float):Void {
+
+	@:allow( echoes.World )
+	private function __update__( dt : Float ) : Void {
 		__dt__ = dt;
-		
-		//Everything else is handled by macro.
+
+		// Everything else is handled by macro.
 	}
-	
+
 	/**
 	 * Adds this to `activeSystems`, activating it.
 	 * 
 	 * Note: you can also activate this by adding it to an active `SystemList`.
 	 */
-	public inline function activate():Void {
-		world.activeSystems.add(this);
+	public inline function activate() : Void {
+		world.activeSystems.add( this );
 	}
-	
+
 	/**
 	 * Removes this from `activeSystems`, deactivating it.
 	 */
-	public inline function deactivate():Void {
-		parent.remove(this);
+	public inline function deactivate() : Void {
+		parent.remove( this );
 	}
-	
+
 	/**
 	 * @see `SystemList.find()`
 	 */
-	private function find<T:System>(systemType:Class<T>):Null<T> {
-		if(Std.isOfType(this, systemType)) {
+	private function find<T : System>( systemType : Class<T> ) : Null<T> {
+		if ( Std.isOfType( this, systemType ) ) {
 			return cast this;
 		} else {
 			return null;
 		}
 	}
-	
-	public function getStatistics():SystemDetails {
+
+	public function getStatistics() : SystemDetails {
 		return {
-			name: Std.string(this)
-			#if echoes_profiling , deltaTime: __updateTime__ #end
+			name : Std.string( this )#if echoes_profiling , deltaTime : __updateTime__ #end
 		};
 	}
-	
+
 	/**
 	 * Returns a view that will activate and deactivate when the system does.
 	 */
-	public macro function getLinkedView(self:Expr, componentTypes:Array<ExprOf<Class<Any>>>):Expr {
-		final view:Expr = World.getInactiveView(macro world, componentTypes);
+	public macro function getLinkedView( self : Expr, componentTypes : Array<ExprOf<Class<Any>>> ) : Expr {
+		final view : Expr = World.getInactiveView( macro world, componentTypes );
 		return macro {
 			final self = $self;
-			self.onActivate.push($view.activate);
-			self.onDeactivate.push($view.deactivate);
+			self.onActivate.push( $view.activate );
+			self.onDeactivate.push( $view.deactivate );
 			$view;
 		};
 	}
-	
-	public function toString():String {
-		return Type.getClassName(Type.getClass(this));
+
+	public function toString() : String {
+		return Type.getClassName( Type.getClass( this ) );
 	}
 }
 
 @:skipBuildMacro
 private class ChildSystem extends System {
-	private final parentSystem:System;
-	
-	private final runUpdateListeners:(Float) -> Void;
-	
+
+	private final parentSystem : System;
+
+	private final runUpdateListeners : ( Float ) -> Void;
+
 	public inline function new(
-		world:World,
-		parentSystem:System, 
-		priority:Int, 
-		runUpdateListeners:(Float) -> Void
+		world : World,
+		parentSystem : System,
+		priority : Int,
+		runUpdateListeners : ( Float ) -> Void
 	) {
-		super(world, priority);
-		
+		super( world, priority );
+
 		this.parentSystem = parentSystem;
 		this.runUpdateListeners = runUpdateListeners;
 	}
-	
-	private override function __update__(dt:Float):Void {
+
+	private override function __update__( dt : Float ) : Void {
 		#if echoes_profiling
 		final __timestamp__ = Date.now().getTime();
 		#end
-		
-		runUpdateListeners(dt);
-		
+
+		runUpdateListeners( dt );
+
 		#if echoes_profiling
-		this.__updateTime__ = Std.int(Date.now().getTime() - __timestamp__);
+		this.__updateTime__ = Std.int( Date.now().getTime() - __timestamp__ );
 		#end
 	}
-	
-	public override function toString():String {
+
+	public override function toString() : String {
 		return parentSystem.toString() + ':$priority';
 	}
 }

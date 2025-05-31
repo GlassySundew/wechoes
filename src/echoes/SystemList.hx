@@ -17,188 +17,188 @@ import echoes.utils.Clock;
  * another. However, `@:add`, `@:update`, and `@:remove` events are disabled for
  * `SystemList` and its subclasses.
  */
-@:allow(echoes) @:skipBuildMacro
+@:allow( echoes ) @:skipBuildMacro
 class SystemList extends System {
-	public final clock:Clock;
-	
-	public var length(get, never):Int;
-	private inline function get_length():Int {
+
+	public final clock : Clock;
+
+	public var length( get, never ) : Int;
+	private inline function get_length() : Int {
 		return systems.length;
 	}
-	
-	public var name:String;
-	
-	public var paused(get, set):Bool;
-	private inline function get_paused():Bool {
+
+	public var name : String;
+
+	public var paused( get, set ) : Bool;
+	private inline function get_paused() : Bool {
 		return clock.paused;
 	}
-	private inline function set_paused(value:Bool):Bool {
+	private inline function set_paused( value : Bool ) : Bool {
 		return clock.paused = value;
 	}
-	
-	private final systems:Array<System> = [];
-	
-	public function new(world, ?name:String = "SystemList", ?clock:Clock, ?priority:Int = 0) {
-		super(world, priority);
-		
+
+	private final systems : Array<System> = [];
+
+	public function new( world, ?name : String = "SystemList", ?clock : Clock, ?priority : Int = 0 ) {
+		super( world, priority );
+
 		this.name = name;
 		this.clock = clock != null ? clock : new Clock();
 	}
-	
-	private override function __activate__():Void {
-		if(!active) {
-			for(system in systems) {
+
+	private override function __activate__() : Void {
+		if ( !active ) {
+			for ( system in systems ) {
 				system.__activate__();
 			}
-			
+
 			super.__activate__();
 		}
 	}
-	
-	private override function __deactivate__():Void {
-		if(active) {
-			for(system in systems) {
+
+	private override function __deactivate__() : Void {
+		if ( active ) {
+			for ( system in systems ) {
 				system.__deactivate__();
 			}
-			
+
 			super.__deactivate__();
 		}
 	}
-	
-	private function __recalculateOrder__(system:System):Void {
-		if(systems.remove(system)) {
-			final index:Int = Lambda.findIndex(systems, existingSystem ->
-				existingSystem.priority < system.priority);
-			
-			if(index >= 0) {
-				systems.insert(index, system);
+
+	private function __recalculateOrder__( system : System ) : Void {
+		if ( systems.remove( system ) ) {
+			final index : Int = Lambda.findIndex( systems, existingSystem ->
+				existingSystem.priority < system.priority );
+
+			if ( index >= 0 ) {
+				systems.insert( index, system );
 			} else {
-				systems.push(system);
-			}	
-		}
-	}
-	
-	private override function __update__(dt:Float):Void {
-		#if echoes_profiling
-		final startTime:Float = haxe.Timer.stamp();
-		#end
-		
-		__dt__ = dt;
-		clock.addTime(dt);
-		for(step in clock) {
-			for(system in systems) {
-				system.__update__(step);
+				systems.push( system );
 			}
 		}
-		
+	}
+
+	private override function __update__( dt : Float ) : Void {
 		#if echoes_profiling
-		__updateTime__ = Std.int((haxe.Timer.stamp() - startTime) * 1000);
+		final startTime : Float = haxe.Timer.stamp();
+		#end
+
+		__dt__ = dt;
+		clock.addTime( dt );
+		for ( step in clock ) {
+			for ( system in systems ) {
+				system.__update__( step );
+			}
+		}
+
+		#if echoes_profiling
+		__updateTime__ = Std.int(( haxe.Timer.stamp() - startTime ) * 1000 );
 		#end
 	}
-	
+
 	/**
 	 * Adds the given system to this list.
 	 */
-	public function add(system:System):SystemList {
-		if(system.parent != null) {
-			if(system.parent == this) {
+	public function add( system : System ) : SystemList {
+		if ( system.parent != null ) {
+			if ( system.parent == this ) {
 				return this;
 			}
-			
-			system.parent.remove(system);
+
+			system.parent.remove( system );
 		}
-		
-		final index:Int = Lambda.findIndex(systems, existingSystem ->
-			existingSystem.priority < system.priority);
-		
-		if(index >= 0) {
-			systems.insert(index, system);
+
+		final index : Int = Lambda.findIndex( systems, existingSystem -> existingSystem.priority < system.priority );
+
+		if ( index >= 0 ) {
+			systems.insert( index, system );
 		} else {
-			systems.push(system);
+			systems.push( system );
 		}
-		
+
 		system.parent = this;
-		
-		if(active) {
+
+		if ( active ) {
 			system.__activate__();
 		}
-		
-		for(child in system.__children__) {
-			add(child);
+
+		for ( child in system.__children__ ) {
+			add( child );
 		}
-		
+
 		return this;
 	}
-	
+
 	/**
 	 * Returns whether this list directly or indirectly contains `system`. Use
 	 * `system.parent` instead if you only want its direct parent.
 	 */
-	public inline function exists(system:System):Bool {
-		var parent:SystemList = system.parent;
-		while(parent != null && parent != this) {
+	public inline function exists( system : System ) : Bool {
+		var parent : SystemList = system.parent;
+		while ( parent != null && parent != this ) {
 			parent = parent.parent;
 		}
 		return parent == this;
 	}
-	
+
 	/**
 	 * Searches this list and all child lists for a system of the given type,
 	 * returning it if found.
 	 */
-	public override function find<T:System>(systemType:Class<T>):Null<T> {
-		for(child in systems) {
-			final result:Null<T> = child.find(systemType);
-			
-			if(result != null) {
+	public override function find<T : System>( systemType : Class<T> ) : Null<T> {
+		for ( child in systems ) {
+			final result : Null<T> = child.find( systemType );
+
+			if ( result != null ) {
 				return result;
 			}
 		}
-		
+
 		return null;
 	}
-	
-	public override function getStatistics():SystemDetails {
-		final result:SystemDetails = super.getStatistics();
-		result.children = [for(system in systems) system.getStatistics()];
+
+	public override function getStatistics() : SystemDetails {
+		final result : SystemDetails = super.getStatistics();
+		result.children = [for ( system in systems ) system.getStatistics()];
 		return result;
 	}
-	
-	public inline function iterator():Iterator<System> {
+
+	public inline function iterator() : Iterator<System> {
 		return systems.iterator();
 	}
-	
-	public inline function keyValueIterator():KeyValueIterator<Int, System> {
+
+	public inline function keyValueIterator() : KeyValueIterator<Int, System> {
 		return systems.keyValueIterator();
 	}
-	
-	public function remove(system:System):SystemList {
-		if(systems.remove(system)) {
+
+	public function remove( system : System ) : SystemList {
+		if ( systems.remove( system ) ) {
 			system.__deactivate__();
-			
+
 			system.parent = null;
-			
-			if(system.__children__ != null) {
-				for(child in system.__children__) {
-					remove(child);
+
+			if ( system.__children__ != null ) {
+				for ( child in system.__children__ ) {
+					remove( child );
 				}
 			}
 		}
-		
+
 		return this;
 	}
-	
-	public function removeAll():SystemList {
-		for(system in systems) {
+
+	public function removeAll() : SystemList {
+		for ( system in systems ) {
 			system.__deactivate__();
 			system.parent = null;
 		}
-		systems.resize(0);
-		
+		systems.resize( 0 );
+
 		return this;
 	}
-	
-	public override function toString():String {
+
+	public override function toString() : String {
 		return '$name: $systems';
 	}
 }

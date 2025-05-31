@@ -7,112 +7,114 @@ import echoes.utils.Signal;
 import haxe.Exception;
 
 #if !macro
-@:genericBuild(echoes.macro.ViewBuilder.build())
+@:genericBuild( echoes.macro.ViewBuilder.build() )
 #end
-class View<Rest> extends ViewBase { }
+class View<Rest> extends ViewBase {}
 
 class ViewBase {
-	private var activations:Int = 0;
-	public var active(get, never):Bool;
-	private inline function get_active():Bool return activations > 0;
-	
+
+	private var activations : Int = 0;
+	public var active( get, never ) : Bool;
+	private inline function get_active() : Bool return activations > 0;
+
 	/**
 	 * All `ComponentStorage` instances related to this view.
 	 */
-	public final componentStorage:ReadOnlyArray<DynamicComponentStorage>;
-	
-	@:allow(echoes.World) 
-	@:allow(echoes.ComponentStorage)
-	private final _entities:Array<Entity> = [];
+	public final componentStorage : ReadOnlyArray<DynamicComponentStorage>;
+
+	@:allow( echoes.World )
+	@:allow( echoes.ComponentStorage )
+	private final _entities : Array<Entity> = [];
+
 	/**
 	 * All entities in this view.
 	 */
-	public var entities(get, never):ReadOnlyArray<Entity>;
-	private inline function get_entities():ReadOnlyArray<Entity> return _entities;
+	public var entities( get, never ) : ReadOnlyArray<Entity>;
+	private inline function get_entities() : ReadOnlyArray<Entity> return _entities;
 
 	final world : World;
-	
-	public inline function new(world : World, componentStorage:Array<DynamicComponentStorage>) {
+
+	public inline function new( world : World, componentStorage : Array<DynamicComponentStorage> ) {
 		this.world = world;
 		this.componentStorage = componentStorage;
 	}
-	
-	public function activate():Void {
+
+	public function activate() : Void {
 		activations++;
-		if(activations == 1) {
-			world._activeViews.push(this);
-			for(e in world.activeEntities) {
-				add(e);
+		if ( activations == 1 ) {
+			world._activeViews.push( this );
+			for ( e in world.activeEntities ) {
+				add( e );
 			}
-			for(storage in componentStorage) {
-				storage._relatedViews.push(this);
+			for ( storage in componentStorage ) {
+				storage._relatedViews.push( this );
 			}
 		}
 	}
-	
-	@:allow(echoes.Entity) @:allow(echoes.ComponentStorage)
-	private inline function add(entity:Entity):Void {
-		var hasAllComponents:Bool = true;
-		for(storage in componentStorage) {
-			if(!storage.exists(entity)) {
+
+	@:allow( echoes.Entity ) @:allow( echoes.ComponentStorage )
+	private inline function add( entity : Entity ) : Void {
+		var hasAllComponents : Bool = true;
+		for ( storage in componentStorage ) {
+			if ( !storage.exists( entity ) ) {
 				hasAllComponents = false;
 				break;
 			}
 		}
-		
-		if(hasAllComponents) {
-			if(!entities.contains(entity)) {
-				_entities.push(entity);
+
+		if ( hasAllComponents ) {
+			if ( !entities.contains( entity ) ) {
+				_entities.push( entity );
 			}
-			dispatchAddedCallback(entity);
+			dispatchAddedCallback( entity );
 		}
 	}
-	
-	public inline function deactivate():Void {
+
+	public inline function deactivate() : Void {
 		activations--;
-		if(activations <= 0) {
+		if ( activations <= 0 ) {
 			reset();
 		}
 	}
-	
-	private function dispatchAddedCallback(entity:Entity):Void {
-		//Overridden by `ViewBuilder`.
+
+	private function dispatchAddedCallback( entity : Entity ) : Void {
+		// Overridden by `ViewBuilder`.
 	}
-	
-	private function dispatchRemovedCallback(entity:Entity, ?removedComponentStorage:DynamicComponentStorage, ?removedComponent:Any):Void {
-		//Overridden by `ViewBuilder`.
+
+	private function dispatchRemovedCallback( entity : Entity, ?removedComponentStorage : DynamicComponentStorage, ?removedComponent : Any ) : Void {
+		// Overridden by `ViewBuilder`.
 	}
-	
-	@:allow(echoes.Entity) @:allow(echoes.ComponentStorage)
-	private inline function remove(entity:Entity, ?removedComponentStorage:DynamicComponentStorage, ?removedComponent:Any):Void {
-		//Many applications will have a mix of short-lived and long-lived
-		//entities. An entity being removed is more likely to be short-lived,
-		//meaning it's near the end of the array.
-		final index:Int = entities.lastIndexOf(entity);
-		if(index >= 0) {
+
+	@:allow( echoes.Entity ) @:allow( echoes.ComponentStorage )
+	private inline function remove( entity : Entity, ?removedComponentStorage : DynamicComponentStorage, ?removedComponent : Any ) : Void {
+		// Many applications will have a mix of short-lived and long-lived
+		// entities. An entity being removed is more likely to be short-lived,
+		// meaning it's near the end of the array.
+		final index : Int = entities.lastIndexOf( entity );
+		if ( index >= 0 ) {
 			#if echoes_stable_order
-			_entities.splice(index, 1);
+			_entities.splice( index, 1 );
 			#else
 			_entities[index] = entities[entities.length - 1];
 			_entities.pop();
 			#end
-			dispatchRemovedCallback(entity, removedComponentStorage, removedComponent);
+			dispatchRemovedCallback( entity, removedComponentStorage, removedComponent );
 		}
 	}
-	
-	@:allow(echoes.World) 
-	private function reset():Void {
+
+	@:allow( echoes.World )
+	private function reset() : Void {
 		activations = 0;
-		world._activeViews.remove(this);
-		_entities.resize(0);
-		
-		for(storage in componentStorage) {
-			storage._relatedViews.remove(this);
+		world._activeViews.remove( this );
+		_entities.resize( 0 );
+
+		for ( storage in componentStorage ) {
+			storage._relatedViews.remove( this );
 		}
 	}
-	
-	public inline function toString():String {
-		return "View<" + [for(storage in componentStorage) storage.componentType].join(", ") + ">";
+
+	public inline function toString() : String {
+		return "View<" + [for ( storage in componentStorage ) storage.componentType].join( ", " ) + ">";
 	}
 }
 
@@ -155,63 +157,64 @@ class ViewBase {
  * ```
  */
 class DynamicView extends ViewBase {
-	public final onAdded:Signal<(Entity, Array<Any>) -> Void> = new Signal<(Entity, Array<Any>) -> Void>();
-	public final onRemoved:Signal<(Entity, Array<Any>) -> Void> = new Signal<(Entity, Array<Any>) -> Void>();
-	
-	public inline function new(world: World, ...componentStorage:DynamicComponentStorage) {
+
+	public final onAdded : Signal< ( Entity, Array<Any> ) -> Void> = new Signal< ( Entity, Array<Any> ) -> Void>();
+	public final onRemoved : Signal< ( Entity, Array<Any> ) -> Void> = new Signal< ( Entity, Array<Any> ) -> Void>();
+
+	public inline function new( world : World, ...componentStorage : DynamicComponentStorage ) {
 		// #if debug
 		// echoes.macro.MacroTools.checkWorld(world);
 		// #end
-		super(world, componentStorage);
+		super( world, componentStorage );
 	}
-	
-	private override function dispatchAddedCallback(entity:Entity):Void {
-		var index:Int = entities.lastIndexOf(entity);
-		for(callback in onAdded) {
-			callback(entity, [for(storage in componentStorage) storage.get(entity)]);
-			
-			//If the callback removed the entity, stop. Cache the index to save
-			//time in most cases. HashLink is known to return 0 when reading out
-			//of bounds, so it has to check length too.
-			if(#if hl index >= entities.length || #end entities[index] != entity) {
-				index = entities.lastIndexOf(entity);
-				if(index < 0) {
+
+	private override function dispatchAddedCallback( entity : Entity ) : Void {
+		var index : Int = entities.lastIndexOf( entity );
+		for ( callback in onAdded ) {
+			callback( entity, [for ( storage in componentStorage ) storage.get( entity )] );
+
+			// If the callback removed the entity, stop. Cache the index to save
+			// time in most cases. HashLink is known to return 0 when reading out
+			// of bounds, so it has to check length too.
+			if ( #if hl index >= entities.length || #end entities[index] != entity ) {
+				index = entities.lastIndexOf( entity );
+				if ( index < 0 ) {
 					break;
 				}
 			}
 		}
 	}
-	
-	private override function dispatchRemovedCallback(entity:Entity, ?removedComponentStorage:DynamicComponentStorage, ?removedComponent:Any):Void {
-		var exception:Exception = null;
-		for(callback in onRemoved) {
+
+	private override function dispatchRemovedCallback( entity : Entity, ?removedComponentStorage : DynamicComponentStorage, ?removedComponent : Any ) : Void {
+		var exception : Exception = null;
+		for ( callback in onRemoved ) {
 			try {
-				callback(entity, [for(storage in componentStorage)
-					storage == removedComponentStorage ? removedComponent : storage.get(entity)]);	
-			} catch(e:Exception) {
+				callback( entity, [for ( storage in componentStorage )
+					storage == removedComponentStorage ? removedComponent : storage.get( entity )] );
+			} catch( e : Exception ) {
 				exception = e;
 			}
 		}
-		
-		if(exception != null) {
+
+		if ( exception != null ) {
 			throw exception;
 		}
 	}
-	
-	private override function reset():Void {
+
+	private override function reset() : Void {
 		super.reset();
 		onAdded.clear();
 		onRemoved.clear();
 	}
-	
-	public function iter(callback:(Entity, Array<Any>) -> Void):Void {
-		var i:Int = 0;
-		while(i < entities.length) {
-			final entity:Entity = entities[i];
-			callback(entity, [for(storage in componentStorage) storage.get(entity)]);
-			
-			if(entity != entities[i] && !entities.contains(entity)) {
-				//Entity was removed; don't increment.
+
+	public function iter( callback : ( Entity, Array<Any> ) -> Void ) : Void {
+		var i : Int = 0;
+		while ( i < entities.length ) {
+			final entity : Entity = entities[i];
+			callback( entity, [for ( storage in componentStorage ) storage.get( entity )] );
+
+			if ( entity != entities[i] && !entities.contains( entity ) ) {
+				// Entity was removed; don't increment.
 			} else {
 				i++;
 			}

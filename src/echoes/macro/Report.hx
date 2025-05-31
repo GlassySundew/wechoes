@@ -1,7 +1,6 @@
 package echoes.macro;
 
 #if macro
-
 #if echoes_report
 import haxe.macro.Context;
 import haxe.macro.Type;
@@ -13,35 +12,33 @@ import haxe.macro.Type;
  * in alphabetical order.
  */
 class Report {
-	@:allow(echoes.macro.ComponentStorageBuilder)
-	private static final componentNames:Array<String> = [];
-	
-	@:allow(echoes.macro.ViewBuilder)
-	private static final viewNames:Array<String> = [];
-	
+
+	@:allow( echoes.macro.ComponentStorageBuilder )
+	private static final componentNames : Array<String> = [];
+
+	@:allow( echoes.macro.ViewBuilder )
+	private static final viewNames : Array<String> = [];
+
 	private static var registered = false;
-	
-	public static function registerCallback():Void {
+
+	public static function registerCallback() : Void {
 		#if echoes_report
-		
-		if(!registered) {
-			Context.onGenerate(function(types:Array<Type>):Void {
-				if(Context.definedValue("echoes_report") == "sorted") {
-					componentNames.sort(MacroTools.compareStrings);
-					viewNames.sort(MacroTools.compareStrings);
+		if ( !registered ) {
+			Context.onGenerate( function ( types : Array<Type> ) : Void {
+				if ( Context.definedValue( "echoes_report" ) == "sorted" ) {
+					componentNames.sort( MacroTools.compareStrings );
+					viewNames.sort( MacroTools.compareStrings );
 				}
-				
-				Sys.println("ECHOES BUILD REPORT:\n"
+
+				Sys.println( "ECHOES BUILD REPORT:\n"
 					+ '    COMPONENTS [${componentNames.length}]:\n'
-					+ "        " + componentNames.join("\n        ") + "\n"
+					+ "        " + componentNames.join( "\n        " ) + "\n"
 					+ '    VIEWS [${viewNames.length}]:\n'
-					+ "        " + viewNames.join("\n        "));
-			});
+					+ "        " + viewNames.join( "\n        " ) );
+			} );
 			registered = true;
 		}
-		
 		#end
 	}
 }
-
 #end
