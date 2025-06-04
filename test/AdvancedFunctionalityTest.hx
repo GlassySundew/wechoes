@@ -228,6 +228,59 @@ class AdvancedFunctionalityTest extends Test {
 		}
 	}
 
+	private function testExclude() : Void {
+
+		final world = new World();
+
+		final system = new ExcludeTestSystem( world );
+		system.activate();
+
+		assertTimesCalled( 0, "ExcludeTestSystem.addTest" );
+
+		final entity : Entity = new Entity( world );
+		entity.add( world, ( "John" : Name ) );
+
+		assertTimesCalled( 1, "ExcludeTestSystem.addTest" );
+
+		final entity2 : Entity = new Entity( world );
+		entity2.add( world, ( 0xFFFFFF : Color ), ( "John" : Name ) );
+
+		assertTimesCalled( 1, "ExcludeTestSystem.addTest" );
+
+		world.update();
+
+		assertTimesCalled( 1, "ExcludeTestSystem.updateTest" );
+
+		entity2.remove( world, Color );
+
+		world.update();
+
+		assertTimesCalled( 3, "ExcludeTestSystem.updateTest" );
+
+		entity2.add( world, ( 0xFFFFFF : Color ), );
+
+		world.update();
+
+		assertTimesCalled( 4, "ExcludeTestSystem.updateTest" );
+
+		entity2.remove( world, Color );
+		entity2.add( world, ( [] : Array<String> ) );
+
+		world.update();
+
+		assertTimesCalled( 5, "ExcludeTestSystem.updateTest" );
+
+		var entity3 = new Entity( world );
+
+		entity3.add( world, ( "John" : Name ), ( 0xFFFFFF : Color ) );
+
+		entity3.remove( world, Name );
+
+		// both of them are triggered by sequentially adding Name comp
+		// and then a Color which triggers Name component removal
+		assertTimesCalled( 2, "ExcludeTestSystem.removeTest" );
+	}
+
 	@:access( echoes.System )
 	private function testPriority() : Void {
 		final world = new World();

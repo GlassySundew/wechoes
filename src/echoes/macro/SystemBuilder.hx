@@ -1,5 +1,6 @@
 package echoes.macro;
 
+import util.Macros;
 #if macro
 import haxe.macro.Expr;
 import haxe.macro.Printer;
@@ -194,7 +195,7 @@ class SystemBuilder {
 				case EField( _.expr => EConst( CIdent( name ) ), "instance" ):
 					name;
 				default:
-					throw "Echoes.getInactiveView() returned an unexpected format. Please report this change.";
+					throw "World.getInactiveView() returned an unexpected format. Please report this change.";
 			};
 
 			// Save the view to link later.
@@ -342,10 +343,19 @@ class SystemBuilder {
 							}}]
 					}
 
-					$b{addListeners.map( listener -> macro cast(( cast( ${listener.view} ) ).onAdded,
-						echoes.utils.Signal<Dynamic> ).push( ${listener.wrapper} ) )} $b{removeListeners.map( listener ->
-						macro cast(( cast ${listener.view} ).onRemoved,
-							echoes.utils.Signal<Dynamic> ).push( ${listener.wrapper} ) )} super.__activate__();
+					$b{
+						addListeners.map( listener -> macro cast(( cast( ${listener.view} ) ).onAdded,
+							echoes.utils.Signal<Dynamic> ).push( ${listener.wrapper} ) )
+					}
+					$b{
+						removeListeners.map(
+							listener -> macro cast( //
+								( cast ${listener.view} ).onRemoved, //
+								echoes.utils.Signal<Dynamic> //
+							).push( ${listener.wrapper} )
+						)
+					}
+					super.__activate__();
 
 					// If any entities already exist, call the `@:add` listeners.
 					$b{addListeners.map( listener -> listener.callDuringUpdate( macro world ) )}
@@ -354,13 +364,19 @@ class SystemBuilder {
 
 			private override function __deactivate__() : Void {
 				if ( active ) {
-					$b{[for ( view in linkedViews )
-						macro world.getOrCreateView( $v{view}, $i{view} ).deactivate()]} $b{addListeners.map( listener ->
-						macro cast(( cast ${listener.view} ).onAdded,
-							echoes.utils.Signal<Dynamic> ).remove( ${listener.wrapper} ) )} $b{removeListeners.map( listener ->
-						macro cast(( cast ${listener.view} ).onRemoved,
-							echoes.utils.Signal<Dynamic> ).remove( ${listener.wrapper} ) )} super.__deactivate__();
-
+					$b{
+						[for ( view in linkedViews )
+							macro world.getOrCreateView( $v{view}, $i{view} ).deactivate()]
+					}
+					$b{
+						addListeners.map( listener -> macro cast(( cast ${listener.view} ).onAdded,
+							echoes.utils.Signal<Dynamic> ).remove( ${listener.wrapper} ) )
+					}
+					$b{
+						removeListeners.map( listener -> macro cast(( cast ${listener.view} ).onRemoved,
+							echoes.utils.Signal<Dynamic> ).remove( ${listener.wrapper} ) )
+					}
+					super.__deactivate__();
 				}
 			}
 
@@ -457,10 +473,11 @@ class SystemBuilder {
 	pos : Position,
 	priority : Null<String>,
 	world : ExprOf<World>,
+	excludeComponents : Array<ComplexType>,
 	?components : Array<ComplexType>,
 	?optionalComponents : Array<ComplexType>,
 	?viewName : String,
-	?wrapperFunction : Field
+	?wrapperFunction : Field,
 };
 
 @:forward
@@ -480,8 +497,14 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 
 				// Check for duplicates. `ViewBuilder` will also check this
 				// later, but its error message would be less specific.
-				final argTypes : Array<String> = [for ( arg in func.args )
-					arg.type != null ? new Printer().printComplexType( arg.type.followComplexType() ) : Context.error( '${arg.name} requires a type.', field.pos )];
+				final argTypes : Array<String> = [
+					for ( arg in func.args )
+						if ( arg.type != null )
+							new Printer().printComplexType( arg.type.followComplexType() )
+						else
+							Context.error( '${arg.name} requires a type.', field.pos )
+				];
+
 				for ( i in 0...argTypes.length ) {
 					for ( j in 0...i ) {
 						if ( argTypes[i] == argTypes[j] ) {
@@ -490,12 +513,23 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 					}
 				}
 
+				final excludeMeta = SystemBuilder.getMeta( field.meta, SystemBuilder.EXCLUDE_META );
+				final excludeComps : Array<ComplexType> = [];
+				if ( excludeMeta != null ) {
+
+					for ( param in excludeMeta.params ) {
+
+						excludeComps.push( MacroTools.parseClassExpr( param ) );
+					}
+				}
+
 				return {
 					name : field.name,
 					args : func.args,
 					pos : field.pos,
 					priority : SystemBuilder.getPriority( field.meta, knownPriorities ),
-					world : world
+					excludeComponents : excludeComps,
+					world : world,
 				};
 			default:
 				return null;
@@ -519,7 +553,7 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 
 			if ( this.components.length > 0 ) {
 				// Make sure the `View` subclass gets built.
-				ViewBuilder.getComponentOrder( this.components );
+				ViewBuilder.getComponentOrder( this.components, this.excludeComponents );
 			}
 		}
 
@@ -553,7 +587,7 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 	public var viewName( get, never ) : String;
 	private function get_viewName() : String {
 		if ( this.viewName == null ) {
-			this.viewName = components.getViewName();
+			this.viewName = components.getViewName( this.excludeComponents );
 		}
 		return this.viewName;
 	}
@@ -582,7 +616,7 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 			// The arguments used in the wrapper function signature.
 			final args : Array<FunctionArg> = // The view always passes an `Entity` as the first argument.
 				[{ name : "entity", type : macro : echoes.Entity }] // The remaining arguments must also be in the view's order.
-				.concat( ViewBuilder.getComponentOrder( components )
+				.concat( ViewBuilder.getComponentOrder( components, this.excludeComponents )
 					// Make sure to use the same names as the listener function.
 					.map( type -> {
 						name : this.args.find( arg -> arg.type.followName() == type.followName() ).name,
@@ -644,7 +678,13 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 	public function callDuringUpdate( world : ExprOf<World> ) : Expr {
 		if ( components.length > 0 ) {
 			return
-				ViewBuilder.forEachEntityInView( macro @:pos( this.pos ) $i{this.name}, this.args, macro __dt__, macro world );
+				ViewBuilder.forEachEntityInView(
+					macro @:pos( this.pos ) $i{this.name},
+					this.args,
+					this.excludeComponents,
+					macro __dt__,
+					macro world
+				);
 		} else if ( optionalComponents.length > 0 ) {
 			return macro for ( entity in world.activeEntities )
 				${call( macro entity, macro __dt__, macro world )};

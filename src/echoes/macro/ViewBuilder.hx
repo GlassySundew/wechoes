@@ -28,10 +28,13 @@ class ViewBuilder {
 	 * Returns the canonical ordering of these components. (If such an ordering
 	 * hasn't been defined, the given order will become canonical.)
 	 */
-	public static function getComponentOrder( components : Array<ComplexType> ) : Array<ComplexType> {
-		final name : String = getViewName( components );
+	public static function getComponentOrder(
+		components : Array<ComplexType>,
+		?excludedComponents : Array<ComplexType>
+	) : Array<ComplexType> {
+		final name : String = getViewName( components, excludedComponents );
 		if ( !viewCache.exists( name ) ) {
-			createViewType( components );
+			createViewType( components, excludedComponents );
 		}
 
 		return viewCache[name].components;
@@ -46,13 +49,19 @@ class ViewBuilder {
 	 * will be limited to 80 characters in C++. To adjust this limit, use
 	 * `-Dechoes_max_name_length=[number]`.
 	 */
-	public static function getViewName( components : Array<ComplexType> ) : String {
+	public static function getViewName(
+		components : Array<ComplexType>,
+		?exclComps : Array<ComplexType>
+	) : String {
+
 		// Use the fully-qualified component names to generate a unique hash.
-		final md5 : String = "_" + Md5.encode( joinNames( components ) ).substr( 0, 5 );
+		final joinExcludes = exclComps == null ? "" : joinNames( exclComps );
+		final md5 : String = "_" + Md5.encode( joinNames( components ) + joinExcludes ).substr( 0, 5 );
 
 		// Use the unqualified component names for the final result, as they're
 		// easier to read. Include part of the hash to avoid collisions.
-		final name : String = "ViewOf_" + joinNames( components, false ) + md5;
+		final joinExcludesNoQual = exclComps == null ? "" : joinNames( exclComps, false );
+		final name : String = "ViewOf_" + joinNames( components, false ) + "_exclude_" + joinExcludesNoQual + md5;
 
 		if ( Context.defined( "cpp" ) ) {
 			var maxLength : Null<Int> = null;
@@ -86,9 +95,12 @@ class ViewBuilder {
 		}
 	}
 
-	public static function createViewType( components : Array<ComplexType> ) : Type {
+	public static function createViewType(
+		components : Array<ComplexType>,
+		?excludedComponents : Array<ComplexType>
+	) : Type {
 		// for ( comp in components ) trace( util.Macros.formatExpr( comp ) );
-		final viewClassName : String = getViewName( components );
+		final viewClassName : String = getViewName( components, excludedComponents );
 
 		if ( viewCache.exists( viewClassName ) ) {
 			return viewCache[viewClassName].type;
@@ -157,6 +169,20 @@ class ViewBuilder {
 
 		// trace(viewTypePath);
 
+		final compExprs = [
+			for ( component in components )
+				macro ${ComponentStorageBuilder.getComponentStorage( macro world, component )}
+		];
+
+		final excludedCompExprs = //
+			if ( excludedComponents != null )
+				[
+					for ( component in excludedComponents )
+						macro ${ComponentStorageBuilder.getComponentStorage( macro world, component )}
+				];
+			else
+				[];
+
 		final def : TypeDefinition = macro class $viewClassName extends echoes.View.ViewBase {
 			// public static final instance:$viewComplexType = new $viewTypePath();
 
@@ -169,12 +195,8 @@ class ViewBuilder {
 
 				super(
 					world,
-					$a{
-						{
-							[for ( component in components )
-								macro ${ComponentStorageBuilder.getComponentStorage( macro world, component )}
-							];
-						}}
+					$a{compExprs},
+					$a{excludedCompExprs}
 				);
 			}
 
@@ -196,7 +218,12 @@ class ViewBuilder {
 				}
 			}
 
-			private override function dispatchRemovedCallback( entity : echoes.Entity, ?removedComponentStorage : echoes.ComponentStorage.DynamicComponentStorage, ?removedComponent : Any ) : Void {
+			private override function dispatchRemovedCallback(
+				entity : echoes.Entity,
+				?removedComponentStorage : echoes.ComponentStorage.DynamicComponentStorage,
+				?removedComponent : Any
+			) : Void {
+
 				var exception : haxe.Exception = null;
 				for ( callback in onRemoved ) {
 					try {
@@ -223,7 +250,13 @@ class ViewBuilder {
 						final args = [for ( i => component in components )
 							{ name : "component" + i, type : component }];
 						args.unshift( { name : "entity", type : macro : echoes.Entity } );
-						forEachEntityInView( macro callback, args, macro 0, macro world );
+						forEachEntityInView( 
+							macro callback, 
+							args,
+							excludedComponents,
+							macro 0, 
+							macro world 
+						);
 					}
 				}
 			}
@@ -239,7 +272,14 @@ class ViewBuilder {
 		return viewType;
 	}
 
-	public static function forEachEntityInView( func : Expr, args : Array<FunctionArg>, getDeltaTime : Expr, worldExpr : ExprOf<World> ) : Expr {
+	public static function forEachEntityInView(
+		func : Expr,
+		args : Array<FunctionArg>,
+		exclComps : Array<ComplexType>,
+		getDeltaTime : Expr,
+		worldExpr : ExprOf<World>
+	) : Expr {
+
 		final requiredComponents : Array<ComplexType> = [];
 		final funcArgs : Array<Expr> = [for ( arg in args ) {
 			switch ( MacroTools.followComplexType( arg.type ) ) {
@@ -255,7 +295,7 @@ class ViewBuilder {
 			}
 		}];
 
-		var viewName = getViewName( requiredComponents );
+		var viewName = getViewName( requiredComponents, exclComps );
 
 		return macro {
 			var i : Int = 0;

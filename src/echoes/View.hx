@@ -21,6 +21,7 @@ class ViewBase {
 	 * All `ComponentStorage` instances related to this view.
 	 */
 	public final componentStorage : ReadOnlyArray<DynamicComponentStorage>;
+	public final excludeComponentStorage : ReadOnlyArray<DynamicComponentStorage>;
 
 	@:allow( echoes.World )
 	@:allow( echoes.ComponentStorage )
@@ -34,9 +35,14 @@ class ViewBase {
 
 	final world : World;
 
-	public inline function new( world : World, componentStorage : Array<DynamicComponentStorage> ) {
+	public inline function new(
+		world : World,
+		componentStorage : Array<DynamicComponentStorage>,
+		?excludeComponentStorage : Array<DynamicComponentStorage>
+	) {
 		this.world = world;
 		this.componentStorage = componentStorage;
+		this.excludeComponentStorage = excludeComponentStorage ?? [];
 	}
 
 	public function activate() : Void {
@@ -49,24 +55,38 @@ class ViewBase {
 			for ( storage in componentStorage ) {
 				storage._relatedViews.push( this );
 			}
+			for ( storage in this.excludeComponentStorage ) {
+				storage._relatedViews.push( this );
+			}
 		}
 	}
 
 	@:allow( echoes.Entity ) @:allow( echoes.ComponentStorage )
 	private inline function add( entity : Entity ) : Void {
-		var hasAllComponents : Bool = true;
-		for ( storage in componentStorage ) {
-			if ( !storage.exists( entity ) ) {
-				hasAllComponents = false;
-				break;
+		var filterFullfilled : Bool = true;
+		for ( storage in excludeComponentStorage ) {
+			if ( storage.exists( entity ) ) {
+				filterFullfilled = false;
+			}
+		}
+		if ( filterFullfilled ) {
+			for ( storage in componentStorage ) {
+				if ( !storage.exists( entity ) ) {
+					filterFullfilled = false;
+					break;
+				}
 			}
 		}
 
-		if ( hasAllComponents ) {
+		if ( filterFullfilled ) {
+
 			if ( !entities.contains( entity ) ) {
 				_entities.push( entity );
 			}
 			dispatchAddedCallback( entity );
+		} else if ( entities.contains( entity ) ) {
+
+			remove( entity );
 		}
 	}
 
@@ -86,7 +106,21 @@ class ViewBase {
 	}
 
 	@:allow( echoes.Entity ) @:allow( echoes.ComponentStorage )
-	private inline function remove( entity : Entity, ?removedComponentStorage : DynamicComponentStorage, ?removedComponent : Any ) : Void {
+	private inline function remove(
+		entity : Entity,
+		?removedComponentStorage : DynamicComponentStorage,
+		?removedComponent : Any
+	) : Void {
+
+		// if (
+		// 	removedComponentStorage != null
+		// 	&& excludeComponentStorage.contains( removedComponentStorage ) //
+		// ) {
+
+		// 	dispatchRemovedCallback( entity, removedComponentStorage, removedComponent );
+		// 	return;
+		// }
+
 		// Many applications will have a mix of short-lived and long-lived
 		// entities. An entity being removed is more likely to be short-lived,
 		// meaning it's near the end of the array.
@@ -99,6 +133,15 @@ class ViewBase {
 			_entities.pop();
 			#end
 			dispatchRemovedCallback( entity, removedComponentStorage, removedComponent );
+		} else if ( removedComponentStorage != null ) {
+
+			for ( exclude in excludeComponentStorage ) {
+
+				if ( exclude == removedComponentStorage ) {
+
+					add( entity );
+				}
+			}
 		}
 	}
 
@@ -109,6 +152,9 @@ class ViewBase {
 		_entities.resize( 0 );
 
 		for ( storage in componentStorage ) {
+			storage._relatedViews.remove( this );
+		}
+		for ( storage in this.excludeComponentStorage ) {
 			storage._relatedViews.remove( this );
 		}
 	}
