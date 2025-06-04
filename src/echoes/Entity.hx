@@ -75,6 +75,9 @@ abstract Entity( Int ) {
 			world.activeEntityIndices[this] = world._activeEntities.length;
 			world._activeEntities.push( cast this );
 		}
+
+		if ( world.entityGens[this] == null )
+			world.entityGens[this] = 0;
 	}
 
 	/**
@@ -193,6 +196,7 @@ abstract Entity( Int ) {
 			removeAll( world );
 			deactivate( world );
 			world.entityIdPool.push( this );
+			world.entityGens[this]++;
 		}
 	}
 

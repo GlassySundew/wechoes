@@ -66,6 +66,13 @@ class World {
 	@:allow( echoes.Entity )
 	private final activeEntityIndices : Array<Null<Int>> = [];
 
+	/**
+	 * The index of each entity in `activeEntities`. For any active entity,
+	 * `entity == activeEntities[activeEntityIndices[entity.id]]`.
+	 */
+	@:allow( echoes.Entity )
+	private final entityGens : Array<Null<Int>> = [];
+
 	@:allow( echoes.ViewBase )
 	private final _activeViews : Array<ViewBase> = [];
 
@@ -166,7 +173,7 @@ class World {
 
 	public function serialize() : String {
 		final data : Dynamic = {
-			"echoes.Echoes.activeEntities" : activeEntities,
+			"world.activeEntities" : activeEntities,
 			"echoes.Entity.idPool" : entityIdPool,
 			"echoes.Entity.nextId" : nextEntityId
 		};
@@ -202,7 +209,7 @@ class World {
 		_activeEntities.resize( 0 );
 
 		final data : Dynamic = Unserializer.run( data );
-		for ( entity in( Reflect.field( data, "echoes.Echoes.activeEntities" ) : Array<Entity> ) ) {
+		for ( entity in( Reflect.field( data, "world.activeEntities" ) : Array<Entity> ) ) {
 			activeEntityIndices[entity.id] = _activeEntities.length;
 			_activeEntities.push( entity );
 		}
@@ -249,12 +256,22 @@ class World {
 	#if macro static #else macro #end
 	public function getInactiveView(
 		world : ExprOf<World>,
-		componentTypes : Array<ExprOf<Class<Any>>>
+		componentTypes : Array<ExprOf<Class<Any>>>,
+		?excludedComponents : Array<ExprOf<Class<Any>>>
 	) : Expr {
-		final componentComplexTypes : Array<ComplexType> = [for ( type in componentTypes )
-			MacroTools.parseClassExpr( type )];
-		final viewName : String = ViewBuilder.getViewName( componentComplexTypes );
-		ViewBuilder.createViewType( componentComplexTypes );
+
+		final componentComplexTypes : Array<ComplexType> = [
+			for ( type in componentTypes )
+				MacroTools.parseClassExpr( type )
+		];
+		final excludedComplexTypes : Array<ComplexType> = //
+			excludedComponents == null ? [] : [
+				for ( type in excludedComponents )
+					MacroTools.parseClassExpr( type )
+			];
+
+		final viewName : String = ViewBuilder.getViewName( componentComplexTypes, excludedComplexTypes );
+		ViewBuilder.createViewType( componentComplexTypes, excludedComplexTypes );
 
 		return macro Std.downcast( $world.getOrCreateView( $v{viewName}, $i{viewName} ), $i{viewName} );
 	}
