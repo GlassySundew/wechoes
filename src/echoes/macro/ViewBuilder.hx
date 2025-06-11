@@ -20,6 +20,8 @@ class ViewBuilder {
 
 	private static final viewCache : Map<String, { cls : ComplexType, components : Array<ComplexType>, type : Type }> = new Map();
 
+	private static var globalId = 0;
+
 	public static inline function isView( name : String ) : Bool {
 		return viewCache.exists( name );
 	}
@@ -184,14 +186,16 @@ class ViewBuilder {
 				[];
 
 		final def : TypeDefinition = macro class $viewClassName extends echoes.View.ViewBase {
-			// public static final instance:$viewComplexType = new $viewTypePath();
+			@:noCompletion
+			@:keep
+			public static final __global_id__ : Int = $v{globalId++};
 
 			public final onAdded = new echoes.utils.Signal<$callbackType>();
 
 			public final onRemoved = new echoes.utils.Signal<$callbackType>();
 
 			private function new( world : echoes.World ) {
-				world.addView( $v{viewClassName}, this );
+				world.addView( $i{viewClassName}, this );
 
 				super(
 					world,
@@ -250,12 +254,12 @@ class ViewBuilder {
 						final args = [for ( i => component in components )
 							{ name : "component" + i, type : component }];
 						args.unshift( { name : "entity", type : macro : echoes.Entity } );
-						forEachEntityInView( 
-							macro callback, 
+						forEachEntityInView(
+							macro callback,
 							args,
 							excludedComponents,
-							macro 0, 
-							macro world 
+							macro 0,
+							macro world
 						);
 					}
 				}
@@ -299,7 +303,7 @@ class ViewBuilder {
 
 		return macro {
 			var i : Int = 0;
-			final entities : haxe.ds.ReadOnlyArray<echoes.Entity> = world.getOrCreateView( $v{viewName}, $i{viewName} ).entities;
+			final entities : haxe.ds.ReadOnlyArray<echoes.Entity> = world.getOrCreateView( $i{viewName} ).entities;
 			while ( i < entities.length ) {
 				final entity : echoes.Entity = entities[i];
 				$func( $a{funcArgs} );

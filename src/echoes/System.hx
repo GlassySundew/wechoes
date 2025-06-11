@@ -5,6 +5,7 @@ import echoes.macro.ViewBuilder;
 import echoes.utils.Signal;
 import echoes.View;
 import haxe.macro.Expr;
+import haxe.macro.Context;
 import haxe.rtti.Meta;
 
 /**
@@ -162,6 +163,42 @@ class System {
 		__dt__ = dt;
 
 		// Everything else is handled by macro.
+	}
+
+	private function createEntity() : Entity {
+
+		return new Entity( world );
+	}
+
+	private function createEntityWithComps(...comps : Dynamic ) : Entity {
+
+		final entity = createEntity();
+
+		entity.add( world, comps );
+		return entity;
+	}
+
+	private function addComponent( entity : Entity, ...component : Dynamic ) {
+
+		entity.add( world, component );
+	}
+
+	private macro function getComponent<T>( 
+		ethis : ExprOf<System>, 
+		entity : ExprOf<Entity>, 
+		component:ExprOf<Class<T>>
+	) : ExprOf<T> {
+
+		return macro @:pos( Context.currentPos() ) $entity.get( world, $component );
+	}
+
+	private macro function hasComponent<T>( 
+		ethis : ExprOf<System>, 
+		entity : ExprOf<Entity>, 
+		component:ExprOf<Class<T>>
+	) : ExprOf<Bool> {
+
+		return macro @:pos( Context.currentPos() ) $entity.exists( world, $component );
 	}
 
 	/**

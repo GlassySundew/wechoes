@@ -10,12 +10,25 @@ import haxe.PosInfos;
 using echoes.macro.MacroTools;
 using haxe.macro.Context;
 using haxe.macro.ComplexTypeTools;
+#end
 
+var storageIdInc = 0;
+
+final storageCache : Map<String, Int> = new Map();
+
+function reserveStorageId( type : String ) : Int {
+
+	if ( storageCache[type] == null )
+		storageCache[type] = storageIdInc++;
+
+	return storageCache[type];
+}
+
+#if macro
 class ComponentStorageBuilder {
 
 	public static inline final PREFIX : String = "ComponentStorage_";
 
-	// private static final storageCache:Map<String, Expr> = new Map();
 	private static var registered : Bool = false;
 
 	public static #if !debug inline #end function getComponentStorage(
@@ -24,14 +37,14 @@ class ComponentStorageBuilder {
 	) : Expr {
 		if ( Context.defined( "display" ) || Sys.args().indexOf( "--no-output" ) >= 0 ) {
 			return
-				macro new echoes.ComponentStorage<$componentComplexType>( world, "For code completion only. If you see this at runtime, it's an error.", "" );
+				macro new echoes.ComponentStorage<$componentComplexType>( world, "For code completion only. If you see this at runtime, it's an error.", 0 );
 		}
 
-		var cls = getComponentStorageName( componentComplexType );
+		var storageId = getComponentStorageId( componentComplexType );
 		var componentComplexType = componentComplexType.followComplexType();
 		final componentTypeName : String = new Printer().printComplexType( componentComplexType );
 
-		var getInstance : Expr = macro new echoes.ComponentStorage<$componentComplexType>( world, $v{componentTypeName}, $v{cls} );
+		var getInstance : Expr = macro new echoes.ComponentStorage<$componentComplexType>( world, $v{componentTypeName}, $v{storageId} );
 
 		final componentBaseType : BaseType = componentComplexType.toType().toBaseType();
 		final meta : MetaAccess = componentBaseType != null ? componentBaseType.meta : null;
@@ -47,11 +60,11 @@ class ComponentStorageBuilder {
 		}
 
 		final result = macro @:pos( Context.currentPos() ) {
-			var inst = $world.getStorage( $v{cls} );
+			var inst = $world.getStorage( $v{storageId} );
 
 			if ( inst == null ) {
 				inst = ${getInstance};
-				$world.addStorage( $v{cls}, inst );
+				$world.addStorage( $v{storageId}, inst );
 			}
 
 			inst;
@@ -60,7 +73,7 @@ class ComponentStorageBuilder {
 		return result;
 	}
 
-	public static function getComponentStorageName( componentComplexType : ComplexType ) : String {
+	public static function getComponentStorageId( componentComplexType : ComplexType ) : Int {
 		componentComplexType = componentComplexType.followComplexType();
 
 		final error : String = componentComplexType.getReservedComponentMessage();
@@ -69,9 +82,11 @@ class ComponentStorageBuilder {
 		}
 
 		final storageTypeName : String = PREFIX + componentComplexType.toIdentifier();
-		// if(storageCache.exists(storageTypeName)) {
-		// 	return storageTypeName;
-		// }
+		if ( storageCache.exists( storageTypeName ) ) {
+			return storageCache[storageTypeName];
+		}
+
+		return storageCache[storageTypeName] = storageIdInc++;
 
 		// final componentTypeName:String = new Printer().printComplexType(componentComplexType);
 		// final storageTypePath:TypePath = { pack: [], name: storageTypeName };
@@ -104,7 +119,7 @@ class ComponentStorageBuilder {
 		// Report.componentNames.push(componentTypeName);
 		// Report.registerCallback();
 
-		return storageTypeName;
+		// return storageTypeName;
 	}
 
 	public static function invalidate() : Void {

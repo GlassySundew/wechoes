@@ -1,9 +1,10 @@
 package echoes;
 
 import echoes.Entity;
+import echoes.View;
+import echoes.macro.ComponentStorageBuilder;
 import echoes.utils.ComponentTypes;
 import echoes.utils.ReadOnlyData;
-import echoes.View;
 import haxe.Exception;
 import haxe.Serializer;
 import haxe.Unserializer;
@@ -69,9 +70,11 @@ class ComponentStorage<T> {
 	#else
 	private final storage : Array<Null<T>> = [];
 	#end
-	public inline function new( world : World, componentType : String, storageName : String ) {
+	public inline function new( world : World, componentType : String, ?storageId : Int ) {
 		this.componentType = componentType;
-		world.addStorage( storageName, this );
+		if ( storageId == null )
+			storageId = echoes.macro.ComponentStorageBuilder.reserveStorageId( componentType );
+		world.addStorage( storageId, this );
 
 		// Some platforms get confused by the declaration of `Array<Null<T>>`,
 		// and treat that as something like `Array<Dynamic>`, and then cast to

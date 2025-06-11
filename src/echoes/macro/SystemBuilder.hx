@@ -339,7 +339,7 @@ class SystemBuilder {
 					$b{
 						[for ( view in linkedViews ) {
 							macro {
-								world.getOrCreateView( $v{view}, $i{view} ).activate();
+								world.getOrCreateView( $i{view} ).activate();
 							}}]
 					}
 
@@ -366,7 +366,7 @@ class SystemBuilder {
 				if ( active ) {
 					$b{
 						[for ( view in linkedViews )
-							macro world.getOrCreateView( $v{view}, $i{view} ).deactivate()]
+							macro world.getOrCreateView( $i{view} ).deactivate()]
 					}
 					$b{
 						addListeners.map( listener -> macro cast(( cast ${listener.view} ).onAdded,
@@ -581,7 +581,7 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 
 	public var view( get, never ) : Expr;
 	private inline function get_view() : Expr {
-		return macro world.getOrCreateView( $v{viewName}, $i{viewName} );
+		return macro world.getOrCreateView( $i{viewName} );
 	}
 
 	public var viewName( get, never ) : String;

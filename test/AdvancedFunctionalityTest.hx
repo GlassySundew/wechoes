@@ -64,8 +64,8 @@ class AdvancedFunctionalityTest extends Test {
 	private function testDynamicViews() : Void {
 		var world = new World();
 
-		final componentStorage0 : ComponentStorage<Any> = new ComponentStorage<Any>( world, "component0", "compStorage0" );
-		final componentStorage1 : ComponentStorage<Any> = new ComponentStorage<Any>( world, "component1", "compStorage1" );
+		final componentStorage0 : ComponentStorage<Any> = new ComponentStorage<Any>( world, "component0" );
+		final componentStorage1 : ComponentStorage<Any> = new ComponentStorage<Any>( world, "component1" );
 
 		final view : DynamicView = new DynamicView( world, componentStorage0, componentStorage1 );
 		view.activate();
@@ -277,7 +277,7 @@ class AdvancedFunctionalityTest extends Test {
 		entity3.remove( world, Name );
 
 		// both of them are triggered by sequentially adding Name comp
-		// and then a Color which triggers Name component removal
+		// and then Color which triggers Name component removal
 		assertTimesCalled( 2, "ExcludeTestSystem.removeTest" );
 	}
 
@@ -588,6 +588,6 @@ typedef IntArray = Array<Int>;
 class IntArrayStorage extends ComponentStorage<IntArray> {
 
 	public function new( world ) {
-		super( world, "IntArray", "IntArrayStorage" );
+		super( world, "IntArray");
 	}
 }

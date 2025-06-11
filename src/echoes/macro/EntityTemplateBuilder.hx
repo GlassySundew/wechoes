@@ -103,7 +103,7 @@ class EntityTemplateBuilder {
 		 * Contains a temporary `storage` value, which is the identifier for the
 		 * `ComponentStorage` for this type.
 		 */
-		final parameters : Array<FunctionArg & { storage : String }> = [];
+		final parameters : Array<FunctionArg & { storageId : Int }> = [];
 
 		/**
 		 * Arguments to pass to `applyTemplateToSelf()`.
@@ -118,7 +118,7 @@ class EntityTemplateBuilder {
 		/**
 		 * The types marked as optional that don't yet have a default value.
 		 */
-		final optionalValuesRemaining : Map<String, ComplexType> = [];
+		final optionalValuesRemaining : Array<ComplexType> = [];
 
 		/**
 		 * Adds the given value to `parameters` and `arguments` unless it's
@@ -148,10 +148,10 @@ class EntityTemplateBuilder {
 						}
 				}
 
-				final storage : String = ComponentStorageBuilder.getComponentStorageName( type );
+				final storageId : Int = ComponentStorageBuilder.getComponentStorageId( type );
 				var existingName : String = null;
 				for ( existing in parameters ) {
-					if ( existing.storage == storage ) {
+					if ( existing.storageId == storageId ) {
 						existingName = existing.name;
 						break;
 					}
@@ -159,12 +159,12 @@ class EntityTemplateBuilder {
 
 				if ( existingName == null ) {
 					existingName = name;
-					parameters.push( { name : name, type : type, storage : storage, opt : optional } );
+					parameters.push( { name : name, type : type, storageId : storageId, opt : optional } );
 
 					arguments.push( macro $i{existingName} );
 
 					if ( optional ) {
-						optionalValuesRemaining[storage] = type;
+						optionalValuesRemaining[storageId] = type;
 					}
 				}
 
@@ -274,11 +274,11 @@ class EntityTemplateBuilder {
 				// update the metadata to make it match, but since macro order is
 				// unspecified, a child type may have already been built using
 				// the wrong metadata.)
-				final storage : String = ComponentStorageBuilder.getComponentStorageName( componentType );
-				final parameter : FunctionArg = parameters.find( p -> p.storage == storage );
+				final storageId : Int = ComponentStorageBuilder.getComponentStorageId( componentType );
+				final parameter : FunctionArg = parameters.find( p -> p.storageId == storageId );
 				if ( parameter != null ) {
 					if ( parameter.opt ) {
-						optionalValuesRemaining.remove( storage );
+						optionalValuesRemaining[storageId] = null;
 					} else {
 						Context.fatalError( 'Components listed in `$ARGUMENTS_TAG` can\'t have default values. '
 							+ 'Consider adding this to `$OPTIONAL_ARGUMENTS_TAG` instead.', field.pos );
@@ -317,9 +317,12 @@ class EntityTemplateBuilder {
 			} );
 		}
 
-		if ( !optionalValuesRemaining.empty() ) {
-			final missing : Array<String> = [for ( type in optionalValuesRemaining )
-				new Printer().printComplexType( type )];
+		if ( !( optionalValuesRemaining.count( ( ele ) -> ele != null ) == 0 ) ) {
+			final missing : Array<String> = [];
+			for ( type in optionalValuesRemaining )
+				if ( type != null )
+					missing.push( new Printer().printComplexType( type ) );
+
 			final s : String = missing.length == 1 ? "" : "s";
 
 			Context.fatalError( 'Missing default value$s for the following component type$s: '

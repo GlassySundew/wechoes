@@ -30,9 +30,9 @@ class World {
 	private inline function get_activeEntities() : ReadOnlyArray<Entity> return _activeEntities;
 
 	@:allow( echoes.ComponentStorage )
-	private final _componentStorage : Map<String, ComponentStorage<Dynamic>> = [];
-	public var componentStorage( get, never ) : Map<String, ComponentStorage<Dynamic>>;
-	private inline function get_componentStorage() : Map<String, ComponentStorage<Dynamic>> return _componentStorage;
+	private final _componentStorage : Array<ComponentStorage<Dynamic>> = [];
+	public var componentStorage( get, never ) : Array<ComponentStorage<Dynamic>>;
+	private inline function get_componentStorage() : Array<ComponentStorage<Dynamic>> return _componentStorage;
 
 	/**
 	 * All currently-active views.
@@ -57,7 +57,7 @@ class World {
 
 	public final components : Array<EntityComponents> = [];
 
-	private final viewStorage : Map<String, ViewBase> = [];
+	private final viewStorage : Array<ViewBase> = [];
 
 	/**
 	 * The index of each entity in `activeEntities`. For any active entity,
@@ -124,7 +124,8 @@ class World {
 		}
 
 		for ( storage in _componentStorage ) {
-			storage.clear();
+			if ( storage != null )
+				storage.clear();
 		}
 		components.resize( 0 );
 
@@ -134,12 +135,12 @@ class World {
 		init( 0 );
 	}
 
-	public function getStorage( id : String ) : ComponentStorage<Dynamic> {
-		return this._componentStorage.get( id );
+	public function getStorage( id : Int ) : ComponentStorage<Dynamic> {
+		return this._componentStorage[id];
 	}
 
-	public function addStorage( id : String, componentStorage : DynamicComponentStorage ) {
-		this._componentStorage.set( id, componentStorage );
+	public function addStorage( id : Int, componentStorage : DynamicComponentStorage ) {
+		this._componentStorage[id] = componentStorage;
 	}
 
 	public macro function getService<T>( ethis : ExprOf<World>, type : ExprOf<Class<T>> ) : ExprOf<T> {
@@ -154,16 +155,21 @@ class World {
 		return macro {@:privateAccess $ethis.services.set( $v{util.Macros.getTypeIdentifier( cl )}, $value );};
 	}
 
-	public function getOrCreateView<T : ViewBase>( id : String, viewType : Class<T> ) : T {
+	public function getOrCreateView<T : ViewBase>( cl : Class<T> ) : T {
+
+		final id : Int = untyped cl.__global_id__;
+
 		if ( viewStorage[id] == null ) {
-			viewStorage[id] = Type.createInstance( viewType, [this] );
+			viewStorage[id] = Type.createInstance( cl, [this] );
 		}
 
 		return cast viewStorage[id];
 	}
 
-	public function addView( id : String, view : ViewBase ) {
-		if ( viewStorage.exists( id ) ) trace( 'attaching an already existing view with id ${id}' );
+	public function addView<T : ViewBase>( cl : Class<T>, view : T ) {
+		final id : Int = untyped cl.__global_id__;
+
+		if ( viewStorage[id] != null ) trace( 'attaching an already existing view with id ${id}' );
 
 		viewStorage[id] = view;
 	}
@@ -179,6 +185,10 @@ class World {
 		};
 
 		for ( storage in componentStorage ) {
+
+			if ( storage == null )
+				continue;
+
 			final components = ( cast storage : ComponentStorage<Dynamic> ).storage;
 
 			// Omit empty arrays. It isn't as easy to check if a map is empty, so
@@ -202,7 +212,8 @@ class World {
 	 */
 	public function unserialize( data : String ) : Void {
 		for ( storage in _componentStorage ) {
-			storage.removeAll( this );
+			if ( storage != null )
+				storage.removeAll( this );
 		}
 
 		activeEntityIndices.resize( 0 );
@@ -221,11 +232,12 @@ class World {
 		}
 
 		for ( storage in componentStorage ) {
-			( cast storage : ComponentStorage<Dynamic> )
-				.unserializeFromData(
-					Reflect.field( data, storage.componentType ),
-					this
-				);
+			if ( storage != null )
+				( cast storage : ComponentStorage<Dynamic> )
+					.unserializeFromData(
+						Reflect.field( data, storage.componentType ),
+						this
+					);
 		}
 	}
 
@@ -273,7 +285,7 @@ class World {
 		final viewName : String = ViewBuilder.getViewName( componentComplexTypes, excludedComplexTypes );
 		ViewBuilder.createViewType( componentComplexTypes, excludedComplexTypes );
 
-		return macro Std.downcast( $world.getOrCreateView( $v{viewName}, $i{viewName} ), $i{viewName} );
+		return macro Std.downcast( $world.getOrCreateView( $i{viewName} ), $i{viewName} );
 	}
 
 	/**
