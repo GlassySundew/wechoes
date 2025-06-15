@@ -66,7 +66,8 @@ abstract Entity( Int ) {
 	 * @param active Whether to activate this entity immediately. Otherwise,
 	 * you'll have to call `activate()`.
 	 */
-	public inline function new( world : World, ?active : Bool = true ) {
+	#if !debug inline #end 
+	public function new( world : World, ?active : Bool = true ) {
 		final id : Null<Int> = world.entityIdPool.pop();
 
 		this = id != null ? id : world.nextEntityId++;
@@ -104,7 +105,8 @@ abstract Entity( Int ) {
 	 * If a component is replaced and its type is tagged `@:echoes_replace`,
 	 * this will dispatch a `@:remove` event before dispatching `@:add`.
 	 */
-	public macro function add( ethis : Expr, world : ExprOf<World>, components : Array<Expr> ) : ExprOf<echoes.Entity> {
+	public #if !macro macro #else static #end
+	function add( ethis : ExprOf<Entity>, world : ExprOf<World>, components : Array<Expr> ) : ExprOf<echoes.Entity> {
 		// Macro-time type check for 'world' argument
 		#if debug
 		MacroTools.checkWorld( world );
@@ -234,7 +236,9 @@ abstract Entity( Int ) {
 	 * @return This entity.
 	 */
 	public macro function remove( self : Expr, world : ExprOf<World>, types : Array<ExprOf<Class<Any>>> ) : ExprOf<echoes.Entity> {
+		#if debug
 		MacroTools.checkWorld( world );
+		#end
 		return EntityTools.remove( self, world, [for ( type in types ) type.parseClassExpr( true )] );
 	}
 

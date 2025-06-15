@@ -360,7 +360,7 @@ class EdgeCaseTest extends Test {
 		assertTimesCalled(3, "RemoveStringSystem.removeString");
 		Assert.equals(1, world.getView(String).entities.length);
 		
-		final view:DynamicView = new DynamicView(world, world.getComponentStorage(Bool));
+		final view:DynamicView = new DynamicView(world, [world.getComponentStorage(Bool)]);
 		view.activate();
 		var count:Int = 0;
 		entity0.add(world, false);

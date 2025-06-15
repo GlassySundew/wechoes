@@ -169,7 +169,8 @@ class World {
 	public function addView<T : ViewBase>( cl : Class<T>, view : T ) {
 		final id : Int = untyped cl.__global_id__;
 
-		if ( viewStorage[id] != null ) trace( 'attaching an already existing view with id ${id}' );
+		if ( viewStorage[id] != null )
+			trace( 'attaching an already existing view with id ${id}' );
 
 		viewStorage[id] = view;
 	}
@@ -268,19 +269,30 @@ class World {
 	#if macro static #else macro #end
 	public function getInactiveView(
 		world : ExprOf<World>,
-		componentTypes : Array<ExprOf<Class<Any>>>,
-		?excludedComponents : Array<ExprOf<Class<Any>>>
+		componentTypes : ExprOf<Array<Class<Any>>>,
+		?excludedComponents : ExprOf<Array<Class<Any>>>
 	) : Expr {
 
-		final componentComplexTypes : Array<ComplexType> = [
-			for ( type in componentTypes )
-				MacroTools.parseClassExpr( type )
-		];
-		final excludedComplexTypes : Array<ComplexType> = //
-			excludedComponents == null ? [] : [
-				for ( type in excludedComponents )
-					MacroTools.parseClassExpr( type )
-			];
+		final componentComplexTypes : Array<ComplexType> = [];
+		switch componentTypes.expr {
+			case EArrayDecl( values ):
+				for ( type in values ) {
+					componentComplexTypes.push( MacroTools.parseClassExpr( type ) );
+				}
+			case _e:
+				throw '$_e is not supported!';
+		}
+
+		final excludedComplexTypes : Array<ComplexType> = [];
+		switch excludedComponents.expr {
+			case EArrayDecl( values ):
+				for ( type in values ) {
+					excludedComplexTypes.push( MacroTools.parseClassExpr( type ) );
+				}
+			case EConst( CIdent( id ) ):
+			case _e:
+				throw '$_e is not supported!';
+		}
 
 		final viewName : String = ViewBuilder.getViewName( componentComplexTypes, excludedComplexTypes );
 		ViewBuilder.createViewType( componentComplexTypes, excludedComplexTypes );
@@ -303,9 +315,10 @@ class World {
 	#if macro static #else macro #end
 	public function getView(
 		world : ExprOf<World>,
-		componentTypes : Array<ExprOf<Class<Any>>>
+		componentTypes : ExprOf<Array<Class<Any>>>,
+		?excludedComponents : ExprOf<Array<Class<Any>>>
 	) : Expr {
-		final view : Expr = World.getInactiveView( world, componentTypes );
+		final view : Expr = World.getInactiveView( world, componentTypes, excludedComponents );
 
 		return macro {
 			$view.activate();

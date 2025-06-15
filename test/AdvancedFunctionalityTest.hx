@@ -67,7 +67,7 @@ class AdvancedFunctionalityTest extends Test {
 		final componentStorage0 : ComponentStorage<Any> = new ComponentStorage<Any>( world, "component0" );
 		final componentStorage1 : ComponentStorage<Any> = new ComponentStorage<Any>( world, "component1" );
 
-		final view : DynamicView = new DynamicView( world, componentStorage0, componentStorage1 );
+		final view : DynamicView = new DynamicView( world, [componentStorage0, componentStorage1] );
 		view.activate();
 		var added : String = "";
 		view.onAdded.add( ( entity, components ) -> added += components.join( "" ) );

@@ -9,9 +9,9 @@ import haxe.Exception;
 #if !macro
 @:genericBuild( echoes.macro.ViewBuilder.build() )
 #end
-class View<Rest> extends ViewBase {}
+abstract class View<Rest> extends ViewBase {}
 
-class ViewBase {
+abstract class ViewBase {
 
 	private var activations : Int = 0;
 	public var active( get, never ) : Bool;
@@ -94,6 +94,20 @@ class ViewBase {
 		activations--;
 		if ( activations <= 0 ) {
 			reset();
+		}
+	}
+
+	public function iterUntyped( callback : ( Entity, Any ) -> Void ) : Void {
+		var i : Int = 0;
+		while ( i < entities.length ) {
+			final entity : Entity = entities[i];
+			callback( entity, [for ( storage in componentStorage ) storage.get( entity )] );
+
+			if ( entity != entities[i] && !entities.contains( entity ) ) {
+				// Entity was removed; don't increment.
+			} else {
+				i++;
+			}
 		}
 	}
 
@@ -207,11 +221,15 @@ class DynamicView extends ViewBase {
 	public final onAdded : Signal< ( Entity, Array<Any> ) -> Void> = new Signal< ( Entity, Array<Any> ) -> Void>();
 	public final onRemoved : Signal< ( Entity, Array<Any> ) -> Void> = new Signal< ( Entity, Array<Any> ) -> Void>();
 
-	public inline function new( world : World, ...componentStorage : DynamicComponentStorage ) {
+	public inline function new(
+		world : World,
+		componentStorages : Array<DynamicComponentStorage>,
+		?excludeComponentStorages : Array<DynamicComponentStorage>
+	) {
 		// #if debug
 		// echoes.macro.MacroTools.checkWorld(world);
 		// #end
-		super( world, componentStorage );
+		super( world, componentStorages, excludeComponentStorages );
 	}
 
 	private override function dispatchAddedCallback( entity : Entity ) : Void {
@@ -251,19 +269,5 @@ class DynamicView extends ViewBase {
 		super.reset();
 		onAdded.clear();
 		onRemoved.clear();
-	}
-
-	public function iter( callback : ( Entity, Array<Any> ) -> Void ) : Void {
-		var i : Int = 0;
-		while ( i < entities.length ) {
-			final entity : Entity = entities[i];
-			callback( entity, [for ( storage in componentStorage ) storage.get( entity )] );
-
-			if ( entity != entities[i] && !entities.contains( entity ) ) {
-				// Entity was removed; don't increment.
-			} else {
-				i++;
-			}
-		}
 	}
 }

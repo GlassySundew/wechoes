@@ -189,7 +189,7 @@ class SystemBuilder {
 			};
 
 			// Get the inactive view for now.
-			expr.expr = World.getInactiveView( macro world, params ).expr;
+			expr.expr = World.getInactiveView( macro world, macro $b{params} ).expr;
 
 			final viewName : String = switch ( expr.expr ) {
 				case EField( _.expr => EConst( CIdent( name ) ), "instance" ):
@@ -518,7 +518,7 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 				if ( excludeMeta != null ) {
 
 					for ( param in excludeMeta.params ) {
-
+trace(param);
 						excludeComps.push( MacroTools.parseClassExpr( param ) );
 					}
 				}

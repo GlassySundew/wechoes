@@ -7,6 +7,10 @@ import echoes.View;
 import haxe.macro.Expr;
 import haxe.macro.Context;
 import haxe.rtti.Meta;
+#if macro
+import echoes.macro.EntityTools;
+import echoes.macro.MacroTools;
+#end
 
 /**
  * The base class for all systems. Using them requires three steps:
@@ -79,8 +83,8 @@ class System {
 
 	public var active( default, null ) : Bool = false;
 
-	public final onActivate : Signal< () -> Void> = new Signal();
-	public final onDeactivate : Signal< () -> Void> = new Signal();
+	public final onActivateSignal : Signal< () -> Void> = new Signal();
+	public final onDeactivateSignal : Signal< () -> Void> = new Signal();
 
 	/**
 	 * The list directly containing this system, if any.
@@ -121,6 +125,8 @@ class System {
 	private inline function new( world : World, ?priority : Int ) {
 		this.world = world;
 		this.priority = priority != null ? priority : __getDefaultPriority__();
+
+		onActivateSignal.add( onActivate );
 	}
 
 	@:allow( echoes.World )
@@ -130,10 +136,12 @@ class System {
 			__dt__ = 0;
 
 			#if !macro
-			onActivate.dispatch();
+			onActivateSignal.dispatch();
 			#end
 		}
 	}
+
+	private dynamic function onActivate() : Void {}
 
 	@:noCompletion
 	private inline function __addListenersWithPriority__( priority : Int, runUpdateListeners : ( Float ) -> Void ) : Void {
@@ -146,7 +154,7 @@ class System {
 			active = false;
 
 			#if !macro
-			onDeactivate.dispatch();
+			onDeactivateSignal.dispatch();
 			#end
 		}
 	}
@@ -174,31 +182,51 @@ class System {
 
 		final entity = createEntity();
 
-		entity.add( world, comps );
+		addComponent( entity, comps );
 		return entity;
 	}
 
-	private function addComponent( entity : Entity, ...component : Dynamic ) {
+	private macro function addComponent(
+		self : ExprOf<System>,
+		entity : ExprOf<Entity>,
+		components : Array<Expr>
+	) : ExprOf<Entity> {
 
-		entity.add( world, component );
+		return Entity.add( entity, macro world, components );
 	}
 
-	private macro function getComponent<T>( 
-		ethis : ExprOf<System>, 
-		entity : ExprOf<Entity>, 
-		component:ExprOf<Class<T>>
+	private macro function getComponent<T>(
+		ethis : ExprOf<System>,
+		entity : ExprOf<Entity>,
+		component : ExprOf<Class<T>>
 	) : ExprOf<T> {
 
 		return macro @:pos( Context.currentPos() ) $entity.get( world, $component );
 	}
 
-	private macro function hasComponent<T>( 
-		ethis : ExprOf<System>, 
-		entity : ExprOf<Entity>, 
-		component:ExprOf<Class<T>>
+	private macro function hasComponent<T>(
+		ethis : ExprOf<System>,
+		entity : ExprOf<Entity>,
+		component : ExprOf<Class<T>>
 	) : ExprOf<Bool> {
 
 		return macro @:pos( Context.currentPos() ) $entity.exists( world, $component );
+	}
+
+	private macro function removeComponent(
+		ethis : ExprOf<System>,
+		entity : ExprOf<Entity>,
+		types : Array<Expr>
+	) : ExprOf<echoes.Entity> {
+
+		// entity.remove(world, components);
+
+		return EntityTools.remove(
+			entity,
+			macro world,
+			[for ( type in types )
+				MacroTools.parseClassExpr( type, true )]
+		);
 	}
 
 	/**
@@ -237,7 +265,7 @@ class System {
 	/**
 	 * Returns a view that will activate and deactivate when the system does.
 	 */
-	public macro function getLinkedView( self : Expr, componentTypes : Array<ExprOf<Class<Any>>> ) : Expr {
+	public macro function getLinkedView( self : Expr, componentTypes : ExprOf<Array<Class<Any>>> ) : Expr {
 		final view : Expr = World.getInactiveView( macro world, componentTypes );
 		return macro {
 			final self = $self;
