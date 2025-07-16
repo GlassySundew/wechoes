@@ -518,7 +518,6 @@ abstract ListenerFunction( ListenerFunctionData ) from ListenerFunctionData {
 				if ( excludeMeta != null ) {
 
 					for ( param in excludeMeta.params ) {
-trace(param);
 						excludeComps.push( MacroTools.parseClassExpr( param ) );
 					}
 				}

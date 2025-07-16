@@ -302,6 +302,10 @@ class MacroTools {
 		}
 	}
 
+	/**
+		Explicit strict type-check for `world` argument, because sometimes compliler would ignore
+		it's absense when calling macro functions :(
+	**/
 	public inline static function checkWorld( world : ExprOf<echoes.World> ) {
 		#if debug
 		var worldType = Context.typeof( world );

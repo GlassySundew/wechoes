@@ -1,5 +1,6 @@
 package echoes;
 
+import util.Macros;
 import echoes.ComponentStorage;
 #if macro
 import echoes.macro.EntityTools;
@@ -66,7 +67,7 @@ abstract Entity( Int ) {
 	 * @param active Whether to activate this entity immediately. Otherwise,
 	 * you'll have to call `activate()`.
 	 */
-	#if !debug inline #end 
+	#if !debug inline #end
 	public function new( world : World, ?active : Bool = true ) {
 		final id : Null<Int> = world.entityIdPool.pop();
 
@@ -106,12 +107,37 @@ abstract Entity( Int ) {
 	 * this will dispatch a `@:remove` event before dispatching `@:add`.
 	 */
 	public #if !macro macro #else static #end
-	function add( ethis : ExprOf<Entity>, world : ExprOf<World>, components : Array<Expr> ) : ExprOf<echoes.Entity> {
-		// Macro-time type check for 'world' argument
+	function add(
+		ethis : ExprOf<Entity>,
+		world : ExprOf<World>,
+		components : Array<Expr>
+	) : ExprOf<echoes.Entity> {
+
+		final additiveMacros = [];
+
 		#if debug
 		MacroTools.checkWorld( world );
+
+		for ( component in components ) {
+
+			final type : Type = MacroTools.parseComponentType( component );
+			final compComplex = Context.toComplexType( type );
+
+			additiveMacros.push(
+				macro if ( ${EntityTools.exists( ethis, world, compComplex )} ) {
+					throw
+						"adding duplicate component: " + ${component} //
+						+ "; over to an entity: " + ${ethis};
+				}
+			);
+		}
 		#end
-		return EntityTools.add( ethis, world, components );
+
+		return macro {
+
+			$b{additiveMacros};
+			${EntityTools.add( ethis, world, components )};
+		};
 	}
 
 	/**
@@ -235,7 +261,8 @@ abstract Entity( Int ) {
 	 * components themselves!
 	 * @return This entity.
 	 */
-	public macro function remove( self : Expr, world : ExprOf<World>, types : Array<ExprOf<Class<Any>>> ) : ExprOf<echoes.Entity> {
+	public #if !macro macro #else static #end
+	function remove( self : Expr, world : ExprOf<World>, types : Array<ExprOf<Class<Any>>> ) : ExprOf<echoes.Entity> {
 		#if debug
 		MacroTools.checkWorld( world );
 		#end

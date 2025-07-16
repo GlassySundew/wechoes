@@ -20,7 +20,7 @@ abstract class ViewBase {
 	/**
 	 * All `ComponentStorage` instances related to this view.
 	 */
-	public final componentStorage : ReadOnlyArray<DynamicComponentStorage>;
+	public final componentStorages : ReadOnlyArray<DynamicComponentStorage>;
 	public final excludeComponentStorage : ReadOnlyArray<DynamicComponentStorage>;
 
 	@:allow( echoes.World )
@@ -37,11 +37,11 @@ abstract class ViewBase {
 
 	public inline function new(
 		world : World,
-		componentStorage : Array<DynamicComponentStorage>,
+		componentStorages : Array<DynamicComponentStorage>,
 		?excludeComponentStorage : Array<DynamicComponentStorage>
 	) {
 		this.world = world;
-		this.componentStorage = componentStorage;
+		this.componentStorages = componentStorages;
 		this.excludeComponentStorage = excludeComponentStorage ?? [];
 	}
 
@@ -52,7 +52,7 @@ abstract class ViewBase {
 			for ( e in world.activeEntities ) {
 				add( e );
 			}
-			for ( storage in componentStorage ) {
+			for ( storage in componentStorages ) {
 				storage._relatedViews.push( this );
 			}
 			for ( storage in this.excludeComponentStorage ) {
@@ -70,7 +70,7 @@ abstract class ViewBase {
 			}
 		}
 		if ( filterFullfilled ) {
-			for ( storage in componentStorage ) {
+			for ( storage in componentStorages ) {
 				if ( !storage.exists( entity ) ) {
 					filterFullfilled = false;
 					break;
@@ -101,7 +101,7 @@ abstract class ViewBase {
 		var i : Int = 0;
 		while ( i < entities.length ) {
 			final entity : Entity = entities[i];
-			callback( entity, [for ( storage in componentStorage ) storage.get( entity )] );
+			callback( entity, [for ( storage in componentStorages ) storage.get( entity )] );
 
 			if ( entity != entities[i] && !entities.contains( entity ) ) {
 				// Entity was removed; don't increment.
@@ -165,7 +165,7 @@ abstract class ViewBase {
 		world._activeViews.remove( this );
 		_entities.resize( 0 );
 
-		for ( storage in componentStorage ) {
+		for ( storage in componentStorages ) {
 			storage._relatedViews.remove( this );
 		}
 		for ( storage in this.excludeComponentStorage ) {
@@ -174,7 +174,7 @@ abstract class ViewBase {
 	}
 
 	public inline function toString() : String {
-		return "View<" + [for ( storage in componentStorage ) storage.componentType].join( ", " ) + ">";
+		return "View<" + [for ( storage in componentStorages ) storage.componentType].join( ", " ) + ">";
 	}
 }
 
@@ -235,7 +235,7 @@ class DynamicView extends ViewBase {
 	private override function dispatchAddedCallback( entity : Entity ) : Void {
 		var index : Int = entities.lastIndexOf( entity );
 		for ( callback in onAdded ) {
-			callback( entity, [for ( storage in componentStorage ) storage.get( entity )] );
+			callback( entity, [for ( storage in componentStorages ) storage.get( entity )] );
 
 			// If the callback removed the entity, stop. Cache the index to save
 			// time in most cases. HashLink is known to return 0 when reading out
@@ -253,7 +253,7 @@ class DynamicView extends ViewBase {
 		var exception : Exception = null;
 		for ( callback in onRemoved ) {
 			try {
-				callback( entity, [for ( storage in componentStorage )
+				callback( entity, [for ( storage in componentStorages )
 					storage == removedComponentStorage ? removedComponent : storage.get( entity )] );
 			} catch( e : Exception ) {
 				exception = e;

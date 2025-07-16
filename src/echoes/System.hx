@@ -8,7 +8,6 @@ import haxe.macro.Expr;
 import haxe.macro.Context;
 import haxe.rtti.Meta;
 #if macro
-import echoes.macro.EntityTools;
 import echoes.macro.MacroTools;
 #end
 
@@ -178,14 +177,6 @@ class System {
 		return new Entity( world );
 	}
 
-	private function createEntityWithComps(...comps : Dynamic ) : Entity {
-
-		final entity = createEntity();
-
-		addComponent( entity, comps );
-		return entity;
-	}
-
 	private macro function addComponent(
 		self : ExprOf<System>,
 		entity : ExprOf<Entity>,
@@ -221,11 +212,10 @@ class System {
 
 		// entity.remove(world, components);
 
-		return EntityTools.remove(
+		return Entity.remove(
 			entity,
 			macro world,
-			[for ( type in types )
-				MacroTools.parseClassExpr( type, true )]
+			types
 		);
 	}
 
