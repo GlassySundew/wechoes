@@ -2,3 +2,6 @@
 .vscode/
 bin/
 dump/
+*.js
+*.js.map
+*.hl
