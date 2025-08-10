@@ -57,6 +57,8 @@ class World {
 
 	public final components : Array<EntityComponents> = [];
 
+	public final entityGens : Array<Null<Int>> = [];
+
 	private final viewStorage : Array<ViewBase> = [];
 
 	/**
@@ -65,13 +67,6 @@ class World {
 	 */
 	@:allow( echoes.Entity )
 	private final activeEntityIndices : Array<Null<Int>> = [];
-
-	/**
-	 * The index of each entity in `activeEntities`. For any active entity,
-	 * `entity == activeEntities[activeEntityIndices[entity.id]]`.
-	 */
-	@:allow( echoes.Entity )
-	private final entityGens : Array<Null<Int>> = [];
 
 	@:allow( echoes.ViewBase )
 	private final _activeViews : Array<ViewBase> = [];
@@ -230,6 +225,7 @@ class World {
 		entityIdPool.resize( 0 );
 		for ( id in( Reflect.field( data, "echoes.Entity.idPool" ) : Array<Int> ) ) {
 			entityIdPool.push( id );
+			entityGens[id]++;
 		}
 
 		for ( storage in componentStorage ) {

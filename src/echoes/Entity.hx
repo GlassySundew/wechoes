@@ -53,7 +53,7 @@ using Lambda;
  * ```
  */
 @:allow( echoes.World )
-abstract Entity( Int ) {
+abstract Entity( Int ) from Int to Int {
 
 	/**
 	 * This entity's unique integer ID. Used internally.

@@ -177,6 +177,10 @@ class System {
 		return new Entity( world );
 	}
 
+	private function getGen( entity : Entity ) {
+		return world.entityGens[entity];
+	}
+
 	private macro function addComponent(
 		self : ExprOf<System>,
 		entity : ExprOf<Entity>,
