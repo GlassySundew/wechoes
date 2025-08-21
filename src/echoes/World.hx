@@ -276,7 +276,7 @@ class World {
 					componentComplexTypes.push( MacroTools.parseClassExpr( type ) );
 				}
 			case _e:
-				throw '$_e is not supported!';
+				throw '$_e should be an Array!';
 		}
 
 		final excludedComplexTypes : Array<ComplexType> = [];

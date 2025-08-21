@@ -289,7 +289,7 @@ class ComponentStorage<T> {
  * add components, use `new ComponentStorage<Dynamic>()` instead. Obviously, no
  * type checking will be performed.
  */
-@:forward( clear, componentType, exists, get, name, relatedViews, remove, removeAll, shortComponentType )
+@:forward( clear, componentType, exists, get, name, relatedViews, remove, removeAll, shortComponentType, add )
 abstract DynamicComponentStorage( ComponentStorage<Dynamic> ) to ComponentStorage<Any> {
 
 	@:from private static inline function fromComponentStorage<T>( componentStorage : ComponentStorage<T> ) : DynamicComponentStorage {
