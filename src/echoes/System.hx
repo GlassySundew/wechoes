@@ -214,13 +214,25 @@ class System {
 		types : Array<Expr>
 	) : ExprOf<echoes.Entity> {
 
-		// entity.remove(world, components);
-
 		return Entity.remove(
 			entity,
 			macro world,
 			types
 		);
+	}
+
+	private macro function destroyEntity(
+		ethis : ExprOf<System>,
+		entity : ExprOf<Entity>,
+		types : Array<Expr>
+	) : ExprOf<echoes.Entity> {
+
+		return macro entity.destroy( world );
+	}
+
+	private function makeHandle( entity : Entity ) : ecs.Types.EntityHandle {
+
+		return { idx : entity, gen : getGen( entity ) };
 	}
 
 	/**
