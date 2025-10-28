@@ -53,7 +53,7 @@ using Lambda;
  * ```
  */
 @:allow( echoes.World )
-abstract Entity( Int ) from Int to Int {
+abstract Entity( Int ) {
 
 	/**
 	 * This entity's unique integer ID. Used internally.
@@ -69,6 +69,7 @@ abstract Entity( Int ) from Int to Int {
 	 */
 	#if !debug inline #end
 	public function new( world : World, ?active : Bool = true ) {
+
 		final id : Null<Int> = world.entityIdPool.pop();
 
 		this = id != null ? id : world.nextEntityId++;

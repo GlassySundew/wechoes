@@ -7,6 +7,7 @@ import echoes.View;
 import haxe.macro.Expr;
 import haxe.macro.Context;
 import haxe.rtti.Meta;
+import hx.concurrent.collection.Queue;
 #if macro
 import echoes.macro.MacroTools;
 #end
@@ -90,6 +91,8 @@ class System {
 	 */
 	public var parent( default, null ) : SystemList;
 
+	public final deferredQueue : Queue<Void -> Void> = new Queue();
+	
 	final world : World;
 
 	/**
@@ -178,7 +181,7 @@ class System {
 	}
 
 	private function getGen( entity : Entity ) {
-		return world.entityGens[entity];
+		return world.entityGens[entity.id];
 	}
 
 	private macro function addComponent(
@@ -230,9 +233,14 @@ class System {
 		return macro entity.destroy( world );
 	}
 
+	private function validateHandle( handle : ecs.Types.EntityHandle ) : Bool {
+
+		return handle.gen == getGen( handle.ent );
+	}
+
 	private function makeHandle( entity : Entity ) : ecs.Types.EntityHandle {
 
-		return { idx : entity, gen : getGen( entity ) };
+		return { ent : entity, gen : getGen( entity ) };
 	}
 
 	/**

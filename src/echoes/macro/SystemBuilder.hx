@@ -393,6 +393,11 @@ class SystemBuilder {
 					}
 				}
 
+				while ( deferredQueue.length > 0 ) {
+
+					deferredQueue.pop()();
+				}
+
 				$b{
 					{
 						[for ( listener in updateListeners ) if ( listener.priority == null )
