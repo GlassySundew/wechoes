@@ -34,6 +34,7 @@ class ViewBuilder {
 		components : Array<ComplexType>,
 		?excludedComponents : Array<ComplexType>
 	) : Array<ComplexType> {
+
 		final name : String = getViewName( components, excludedComponents );
 		if ( !viewCache.exists( name ) ) {
 			createViewType( components, excludedComponents );
@@ -87,6 +88,9 @@ class ViewBuilder {
 	}
 
 	public static function build() : Type {
+
+		#if display return null; #end
+
 		switch ( Context.getLocalType() ) {
 			case TInst( _, types ) if ( types != null && types.length > 0 ):
 				return createViewType( [for ( type in types )
@@ -251,8 +255,10 @@ class ViewBuilder {
 			public function iter( callback : $callbackType ) : Void {
 				${
 					{
-						final args = [for ( i => component in components )
-							{ name : "component" + i, type : component }];
+						final args = [
+							for ( i => component in components )
+								{ name : "component" + i, type : component }
+						];
 						args.unshift( { name : "entity", type : macro : echoes.Entity } );
 						forEachEntityInView(
 							macro callback,

@@ -5,7 +5,6 @@ import echoes.ComponentStorage;
 #if macro
 import echoes.macro.EntityTools;
 import haxe.macro.Expr;
-import haxe.macro.Context;
 import haxe.macro.Type;
 
 using echoes.macro.ComponentStorageBuilder;
@@ -119,16 +118,20 @@ abstract Entity( Int ) {
 		#if debug
 		MacroTools.checkWorld( world );
 
+		final pos = Context.currentPos();
+
 		for ( component in components ) {
 
 			final type : Type = MacroTools.parseComponentType( component );
 			final compComplex = Context.toComplexType( type );
 
 			additiveMacros.push(
-				macro if ( ${EntityTools.exists( ethis, world, compComplex )} ) {
-					throw
+				macro @:pos( pos ) if( ${EntityTools.exists( ethis, world, compComplex )} ) {
+
+					@:pos( pos ) throw new haxe.Exception(
 						"adding duplicate component: " + ${component} //
-						+ "; over to an entity: " + ${ethis};
+						+ "; over to an entity: " + ${ethis}
+					);
 				}
 			);
 		}
