@@ -89,8 +89,6 @@ class ViewBuilder {
 
 	public static function build() : Type {
 
-		#if display return null; #end
-
 		switch ( Context.getLocalType() ) {
 			case TInst( _, types ) if ( types != null && types.length > 0 ):
 				return createViewType( [for ( type in types )
@@ -105,6 +103,9 @@ class ViewBuilder {
 		components : Array<ComplexType>,
 		?excludedComponents : Array<ComplexType>
 	) : Type {
+
+		#if display return null; #end
+
 		// for ( comp in components ) trace( util.Macros.formatExpr( comp ) );
 		final viewClassName : String = getViewName( components, excludedComponents );
 
