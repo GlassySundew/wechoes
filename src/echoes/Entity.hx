@@ -124,13 +124,19 @@ abstract Entity( Int ) {
 
 			final type : Type = MacroTools.parseComponentType( component );
 			final compComplex = Context.toComplexType( type );
+			final name = switch compComplex {
+				case TPath( p ):
+					p.sub;
+				default: compComplex + " not supported";
+			}
 
 			additiveMacros.push(
 				macro @:pos( pos ) if( ${EntityTools.exists( ethis, world, compComplex )} ) {
 
 					@:pos( pos ) throw new haxe.Exception(
-						"adding duplicate component: " + ${component} //
-						+ "; over to an entity: " + ${ethis}
+						"adding duplicate component: { "
+						+ $v{name}
+						+ " } over to an entity: " + ${ethis}
 					);
 				}
 			);
