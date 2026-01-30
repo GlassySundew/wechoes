@@ -340,7 +340,8 @@ class SystemBuilder {
 						[for ( view in linkedViews ) {
 							macro {
 								world.getOrCreateView( $i{view} ).activate();
-							}}]
+							}
+						}]
 					}
 
 					$b{
@@ -395,7 +396,10 @@ class SystemBuilder {
 
 				while ( deferredQueue.length > 0 ) {
 
-					deferredQueue.pop()();
+					final cb = deferredQueue.pop();
+					if ( cb == null )
+						continue;
+					cb();
 				}
 
 				$b{

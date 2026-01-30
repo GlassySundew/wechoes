@@ -92,7 +92,7 @@ class System {
 	public var parent( default, null ) : SystemList;
 
 	public final deferredQueue : Queue<Void -> Void> = new Queue();
-	
+
 	final world : World;
 
 	/**
@@ -193,11 +193,36 @@ class System {
 		return Entity.add( entity, macro world, components );
 	}
 
+	#if macro
+	static function isNullable( t : haxe.macro.Type ) : Bool {
+
+		return switch ( t ) {
+			case TAbstract( a, params ):
+				// Null<T>
+				a.get().pack.length == 0 && a.get().name == "Null";
+			case TMono( t ):
+				// implicit variable type
+				t.get() == null;
+			default:
+				false;
+		}
+	}
+	#end
+
 	private macro function getComponent<T>(
 		ethis : ExprOf<System>,
 		entity : ExprOf<Entity>,
 		component : ExprOf<Class<T>>
-	) : ExprOf<T> {
+	) : ExprOf<Null<T>> {
+
+		final expected = Context.getExpectedType();
+		if ( expected != null && !isNullable( expected ) ) {
+			Context.error(
+				'getComponent(...) returns Null<T>. Do not assign it to a non-nullable type. ' +
+				'Use `final x:Null<T> = ...` or call getComponentRequired(...).',
+				Context.currentPos()
+			);
+		}
 
 		return macro @:pos( Context.currentPos() ) $entity.get( world, $component );
 	}
@@ -233,7 +258,7 @@ class System {
 		return macro entity.destroy( world );
 	}
 
-	private function validateHandle( handle : ecs.Types.EntityHandle ) : Bool {
+	private function isHandleValid( handle : ecs.Types.EntityHandle ) : Bool {
 
 		return handle.gen == getGen( handle.ent );
 	}

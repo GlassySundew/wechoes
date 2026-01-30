@@ -130,6 +130,15 @@ class World {
 		init( 0 );
 	}
 
+	public inline function getGen( entity : Entity ) {
+		return entityGens[entity.id];
+	}
+
+	public inline function makeHandle( entity : Entity ) : ecs.Types.EntityHandle {
+
+		return { ent : entity, gen : getGen( entity ) };
+	}
+
 	public function getStorage( id : Int ) : ComponentStorage<Dynamic> {
 		return this._componentStorage[id];
 	}
