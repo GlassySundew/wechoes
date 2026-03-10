@@ -84,6 +84,9 @@ class SystemList extends System {
 		final startTime : Float = haxe.Timer.stamp();
 		#end
 
+		if ( dt < 0 )
+			dt = 0;
+
 		__dt__ = dt;
 		clock.addTime( dt );
 		for ( step in clock ) {

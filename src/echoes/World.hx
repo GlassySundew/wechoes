@@ -134,6 +134,11 @@ class World {
 		return entityGens[entity.id];
 	}
 
+	public inline function isHandleValid( handle : ecs.Types.EntityHandle ) : Bool {
+
+		return handle.gen == getGen( handle.ent );
+	}
+	
 	public inline function makeHandle( entity : Entity ) : ecs.Types.EntityHandle {
 
 		return { ent : entity, gen : getGen( entity ) };
