@@ -104,8 +104,6 @@ class ViewBuilder {
 		?excludedComponents : Array<ComplexType>
 	) : Type {
 
-		#if display return null; #end
-
 		// for ( comp in components ) trace( util.Macros.formatExpr( comp ) );
 		final viewClassName : String = getViewName( components, excludedComponents );
 
