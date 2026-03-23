@@ -91,7 +91,11 @@ class SystemList extends System {
 		clock.addTime( dt );
 		for ( step in clock ) {
 			for ( system in systems ) {
-				system.__update__( step );
+				try {
+					system.__update__( step );
+				} catch ( error : haxe.Exception ) {
+					world.__reportSystemError__( this, system, error, dt, step );
+				}
 			}
 		}
 

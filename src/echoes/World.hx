@@ -42,6 +42,11 @@ class World {
 
 	public final activeSystems : SystemList;
 
+	public final updateErrors : Array<SystemExecutionError> = [];
+
+	public var hasUpdateErrors( get, never ) : Bool;
+	private inline function get_hasUpdateErrors() : Bool return updateErrors.length > 0;
+
 	/**
 	 * A destroyed entity's ID will go in this pool, and will then be reassigned
 	 * to the next entity to be created.
@@ -99,6 +104,7 @@ class World {
 		final startTime : Float = haxe.Timer.stamp();
 		final dt : Float = startTime - lastUpdate;
 		lastUpdate = startTime;
+		__beginUpdate__();
 
 		activeSystems.__update__( dt );
 
@@ -182,6 +188,28 @@ class World {
 			trace( 'attaching an already existing view with id ${id}' );
 
 		viewStorage[id] = view;
+	}
+
+	@:allow( echoes.SystemList )
+	private inline function __beginUpdate__() : Void {
+		updateErrors.resize( 0 );
+	}
+
+	@:allow( echoes.SystemList )
+	private function __reportSystemError__(
+		systemList : SystemList,
+		system : System,
+		error : haxe.Exception,
+		dt : Float,
+		step : Float
+	) : Void {
+		updateErrors.push( {
+			systemName : Std.string( system ),
+			systemListName : systemList.name,
+			error : error,
+			deltaTime : dt,
+			step : step
+		} );
 	}
 
 	// Serialization
@@ -353,4 +381,12 @@ typedef SystemDetails = {
 	#if echoes_profiling
 	var deltaTime : Int;
 	#end
+};
+
+typedef SystemExecutionError = {
+	var systemName : String;
+	var systemListName : String;
+	var error : haxe.Exception;
+	var deltaTime : Float;
+	var step : Float;
 };

@@ -93,6 +93,7 @@ class System {
 
 	public final deferredQueue : Queue<Void -> Void> = new Queue();
 
+	@:allow( echoes.SystemList )
 	final world : World;
 
 	/**
