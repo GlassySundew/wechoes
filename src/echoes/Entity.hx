@@ -242,7 +242,13 @@ abstract Entity( Int ) {
 	 * Returns whether the entity has a component of the given type.
 	 * @param type The type to check for.
 	 */
-	public macro function exists( self : Expr, world : ExprOf<World>, type : ExprOf<Class<Any>> ) : ExprOf<Bool> {
+	public #if !macro macro #else static #end
+	function exists(
+		self : Expr,
+		world : ExprOf<World>,
+		type : ExprOf<Class<Any>>
+	) : ExprOf<Bool> {
+
 		return EntityTools.exists( self, world, type.parseClassExpr( true ) );
 	}
 
@@ -252,7 +258,13 @@ abstract Entity( Int ) {
 	 * @param type The type of the component to get.
 	 * @return The component, or `null` if the entity doesn't have it.
 	 */
-	public macro function get<T>( self : Expr, world : ExprOf<World>, type : ExprOf<Class<T>> ) : ExprOf<T> {
+	public #if !macro macro #else static #end
+	function get<T>(
+		self : Expr,
+		world : ExprOf<World>,
+		type : ExprOf<Class<T>>
+	) : ExprOf<T> {
+
 		return EntityTools.get( self, world, type.parseClassExpr( true ) );
 	}
 
