@@ -10,6 +10,7 @@ import haxe.rtti.Meta;
 import hx.concurrent.collection.Queue;
 #if macro
 import echoes.macro.MacroTools;
+using echoes.macro.MacroTools;
 #end
 
 /**
@@ -185,7 +186,7 @@ class System {
 		return world.entityGens[entity.id];
 	}
 
-	private macro function addComponent(
+	private inline macro function addComponent(
 		self : ExprOf<System>,
 		entity : ExprOf<Entity>,
 		components : Array<Expr>
@@ -215,6 +216,8 @@ class System {
 		entity : ExprOf<Entity>,
 		component : ExprOf<Class<T>>
 	) : ExprOf<Null<T>> {
+		final componentType : ComplexType = component.parseClassExpr( true );
+		final nullableComponentType : ComplexType = macro : Null<$componentType>;
 
 		final expected = Context.getExpectedType();
 		if ( expected != null && !isNullable( expected ) ) {
@@ -225,7 +228,7 @@ class System {
 			);
 		}
 
-		return macro @:pos( Context.currentPos() ) $entity.get( world, $component );
+		return macro @:pos( Context.currentPos() ) ( cast $entity.get( world, $component ) : $nullableComponentType );
 	}
 
 	private macro function hasComponent<T>(

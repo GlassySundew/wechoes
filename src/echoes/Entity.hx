@@ -263,7 +263,7 @@ abstract Entity( Int ) {
 		self : Expr,
 		world : ExprOf<World>,
 		type : ExprOf<Class<T>>
-	) : ExprOf<T> {
+	) : ExprOf<Null<T>> {
 
 		return EntityTools.get( self, world, type.parseClassExpr( true ) );
 	}
@@ -405,3 +405,7 @@ abstract Entity( Int ) {
 macro function build() : Array<Field> {
 	return echoes.macro.EntityTemplateBuilder.build();
 }
+
+
+
+

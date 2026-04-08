@@ -112,9 +112,10 @@ class EntityTools {
 	 * @param type The type of the component to get.
 	 * @return The component, or `null` if the entity doesn't have it.
 	 */
-	public static function get<T>( self : Expr, world : ExprOf<World>, complexType : ComplexType ) : ExprOf<T> {
+	public static function get<T>( self : Expr, world : ExprOf<World>, complexType : ComplexType ) : ExprOf<Null<T>> {
 		final storage : Expr = ComponentStorageBuilder.getComponentStorage( world, complexType );
-		return macro @:pos( Context.currentPos() ) $storage.get( $self );
+		final nullableType : ComplexType = macro : Null<$complexType>;
+		return macro @:pos( Context.currentPos() ) ( cast $storage.get( $self ) : $nullableType );
 	}
 
 	/**
