@@ -37,14 +37,22 @@ class ComponentStorageBuilder {
 	) : Expr {
 		if ( Context.defined( "display" ) || Sys.args().indexOf( "--no-output" ) >= 0 ) {
 			return
-				macro new echoes.ComponentStorage<$componentComplexType>( world, "For code completion only. If you see this at runtime, it's an error.", 0 );
+				macro new echoes.ComponentStorage<$componentComplexType>(
+					world,
+					"For code completion only. If you see this at runtime, it's an error.",
+					0
+				);
 		}
 
 		var storageId = getComponentStorageId( componentComplexType );
 		var componentComplexType = componentComplexType.followComplexType();
 		final componentTypeName : String = new Printer().printComplexType( componentComplexType );
 
-		var getInstance : Expr = macro new echoes.ComponentStorage<$componentComplexType>( world, $v{componentTypeName}, $v{storageId} );
+		var createStorage : Expr = macro new echoes.ComponentStorage<$componentComplexType>(
+			world,
+			$v{componentTypeName},
+			$v{storageId}
+		);
 
 		final componentBaseType : BaseType = componentComplexType.toType().toBaseType();
 		final meta : MetaAccess = componentBaseType != null ? componentBaseType.meta : null;
@@ -54,7 +62,7 @@ class ComponentStorageBuilder {
 				case x if ( componentBaseType.params.length > 0 ):
 					Context.error( "@:echoes_storage doesn't work with type params, for type " + new Printer().printComplexType( componentComplexType ), Context.currentPos() );
 				case [_.params => [customSingleton]]:
-					getInstance = customSingleton;
+					createStorage = customSingleton;
 				default:
 			}
 		}
@@ -63,7 +71,7 @@ class ComponentStorageBuilder {
 			var inst = $world.getStorage( $v{storageId} );
 
 			if ( inst == null ) {
-				inst = ${getInstance};
+				inst = ${createStorage};
 				$world.addStorage( $v{storageId}, inst );
 			}
 
