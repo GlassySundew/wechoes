@@ -88,16 +88,42 @@ class SystemBuilder {
 		return null;
 	}
 
+	private static function addMetaParameterReferences( meta : Metadata, searchTerm : String, references : Map<String, Expr> ) : Void {
+		final entry : MetadataEntry = getMeta( meta, searchTerm );
+		if ( entry != null ) {
+			for ( expr in entry.params ) {
+				references[new Printer().printExpr( expr )] = expr;
+			}
+		}
+	}
+
+	private static function addDisplayMetaReferences( fields : Array<Field>, meta : Metadata ) : Array<Field> {
+		final referencesByKey : Map<String, Expr> = new Map();
+		getPriority( meta, referencesByKey );
+		for ( field in fields ) {
+			getPriority( field.meta, referencesByKey );
+			addMetaParameterReferences( field.meta, EXCLUDE_META, referencesByKey );
+		}
+
+		if ( referencesByKey.iterator().hasNext() ) {
+			final references : Array<Expr> = [for ( expr in referencesByKey ) macro $expr];
+			fields.push(( macro class DisplayPriorityReferences {
+				@:noCompletion
+				private function __echoes_display_meta_references__( ?priority : Int ) : Void {
+					$b{references}
+				}
+			} ).fields[0] );
+		}
+
+		return fields;
+	}
+
 	public static function build() : Array<Field> {
 		return buildInternal( false );
 	}
 
 	private static function buildInternal( isGenericBuild : Bool ) : Array<Field> {
 		var fields : Array<Field> = Context.getBuildFields();
-
-		if ( Context.defined( "display" ) ) {
-			return fields;
-		}
 
 		// Information gathering
 		// =====================
@@ -122,6 +148,10 @@ class SystemBuilder {
 				Context.warning( "SystemBuilder only acts on classes.", Context.currentPos() );
 				return fields;
 		};
+
+		if ( Context.defined( "display" ) ) {
+			return addDisplayMetaReferences( fields, classType.meta.get() );
+		}
 
 		/**
 		 * `classType`, plus all superclasses in order, including `System`.

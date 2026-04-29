@@ -259,7 +259,7 @@ class System {
 		types : Array<Expr>
 	) : ExprOf<echoes.Entity> {
 
-		return macro entity.destroy( world );
+		return macro $entity.destroy( world );
 	}
 
 	private function isHandleValid( handle : ecs.Types.EntityHandle ) : Bool {
