@@ -29,9 +29,48 @@ class EntityTools {
 	 * If a component is replaced and its type is tagged `@:echoes_replace`,
 	 * this will dispatch a `@:remove` event before dispatching `@:add`.
 	 */
-	public static function add( self : Expr, world : ExprOf<World>, components : Array<Expr> ) : ExprOf<echoes.Entity> {
+	public static function add(
+		self : Expr,
+		world : ExprOf<World>,
+		components : Array<Expr>
+	) : ExprOf<echoes.Entity> {
+
+		final duplicateAdditionChecks = [];
+
+		final pos = Context.currentPos();
+
+		for ( component in components ) {
+
+			final type : Type = MacroTools.parseComponentType( component );
+			final compComplex = Context.toComplexType( type );
+			final name = switch compComplex {
+				case TPath( p ):
+					p.sub;
+				default: compComplex + " not supported";
+			}
+
+			duplicateAdditionChecks.push(
+				macro @:pos( pos ) if( ${
+					EntityTools.exists(
+						macro __entity__,
+						world,
+						compComplex
+					)
+				} ) {
+
+					@:pos( pos ) throw new haxe.Exception(
+						"adding duplicate component: { "
+						+ $v{name}
+						+ " } over to an entity: " + __entity__
+					);
+				}
+			);
+		}
+
 		return macro @:pos( Context.currentPos() ) {
 			final __entity__ : echoes.Entity = $self;
+
+			$b{duplicateAdditionChecks};
 
 			$b{
 				[for ( component in components ) {
@@ -77,7 +116,8 @@ class EntityTools {
 					final type : Type = MacroTools.parseComponentType( component );
 
 					final storage : Expr = ComponentStorageBuilder.getComponentStorage( world, Context.toComplexType( type ) );
-					macro if ( !$storage.exists( __entity__ ) ) $storage.add( __entity__, $component, world );
+					macro if ( !$storage.exists( __entity__ ) )
+						$storage.add( __entity__, $component, world );
 				}]
 			}
 

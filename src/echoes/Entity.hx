@@ -113,39 +113,12 @@ abstract Entity( Int ) {
 		components : Array<Expr>
 	) : ExprOf<echoes.Entity> {
 
-		final additiveMacros = [];
-
 		#if debug
 		MacroTools.checkWorld( world );
-
-		final pos = Context.currentPos();
-
-		for ( component in components ) {
-
-			final type : Type = MacroTools.parseComponentType( component );
-			final compComplex = Context.toComplexType( type );
-			final name = switch compComplex {
-				case TPath( p ):
-					p.sub;
-				default: compComplex + " not supported";
-			}
-
-			additiveMacros.push(
-				macro @:pos( pos ) if( ${EntityTools.exists( ethis, world, compComplex )} ) {
-
-					@:pos( pos ) throw new haxe.Exception(
-						"adding duplicate component: { "
-						+ $v{name}
-						+ " } over to an entity: " + ${ethis}
-					);
-				}
-			);
-		}
 		#end
 
 		return macro {
 
-			$b{additiveMacros};
 			${EntityTools.add( ethis, world, components )};
 		};
 	}
@@ -284,11 +257,21 @@ abstract Entity( Int ) {
 	 * @return This entity.
 	 */
 	public #if !macro macro #else static #end
-	function remove( self : Expr, world : ExprOf<World>, types : Array<ExprOf<Class<Any>>> ) : ExprOf<echoes.Entity> {
+	function remove(
+		self : Expr,
+		world : ExprOf<World>,
+		types : Array<ExprOf<Class<Any>>>
+	) : ExprOf<echoes.Entity> {
+
 		#if debug
 		MacroTools.checkWorld( world );
 		#end
-		return EntityTools.remove( self, world, [for ( type in types ) type.parseClassExpr( true )] );
+
+		return EntityTools.remove(
+			self,
+			world,
+			[for ( type in types ) type.parseClassExpr( true )]
+		);
 	}
 
 	/**
@@ -405,7 +388,3 @@ abstract Entity( Int ) {
 macro function build() : Array<Field> {
 	return echoes.macro.EntityTemplateBuilder.build();
 }
-
-
-
-
