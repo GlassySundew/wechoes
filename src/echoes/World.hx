@@ -3,7 +3,7 @@ package echoes;
 import echoes.macro.MacroTools;
 import echoes.macro.ComponentStorageBuilder;
 import echoes.ComponentStorage.EntityComponents;
-import echoes.View.ViewBase;
+import echoes.Query.QueryBase;
 import echoes.ComponentStorage.DynamicComponentStorage;
 import haxe.ds.ReadOnlyArray;
 import haxe.Unserializer;
@@ -12,7 +12,7 @@ import haxe.Serializer;
 import haxe.macro.Expr;
 import echoes.macro.ComponentStorageBuilder;
 import echoes.macro.MacroTools;
-import echoes.macro.ViewBuilder;
+import echoes.macro.QueryBuilder;
 #end
 
 class World {
@@ -35,10 +35,14 @@ class World {
 	private inline function get_componentStorage() : Array<ComponentStorage<Dynamic>> return _componentStorage;
 
 	/**
-	 * All currently-active views.
+	 * All currently-active queries.
 	 */
-	public var activeViews( get, never ) : ReadOnlyArray<ViewBase>;
-	private inline function get_activeViews() : ReadOnlyArray<ViewBase> return _activeViews;
+	public var activeQueries( get, never ) : ReadOnlyArray<QueryBase>;
+	private inline function get_activeQueries() : ReadOnlyArray<QueryBase> return _activeQueries;
+
+	@:deprecated( "Use activeQueries instead." )
+	public var activeViews( get, never ) : ReadOnlyArray<QueryBase>;
+	private inline function get_activeViews() : ReadOnlyArray<QueryBase> return activeQueries;
 
 	public final activeSystems : SystemList;
 
@@ -64,7 +68,7 @@ class World {
 
 	public final entityGens : Array<Null<Int>> = [];
 
-	private final viewStorage : Array<ViewBase> = [];
+	private final queryStorage : Array<QueryBase> = [];
 
 	/**
 	 * The index of each entity in `activeEntities`. For any active entity,
@@ -73,8 +77,8 @@ class World {
 	@:allow( echoes.Entity )
 	private final activeEntityIndices : Array<Null<Int>> = [];
 
-	@:allow( echoes.ViewBase )
-	private final _activeViews : Array<ViewBase> = [];
+	@:allow( echoes.QueryBase )
+	private final _activeQueries : Array<QueryBase> = [];
 
 	private var updateTimer : haxe.Timer;
 
@@ -119,9 +123,9 @@ class World {
 		activeSystems.removeAll();
 
 		// Iterate backwards when removing items from arrays.
-		var i : Int = activeViews.length;
+		var i : Int = activeQueries.length;
 		while ( --i >= 0 ) {
-			activeViews[i].reset();
+			activeQueries[i].reset();
 		}
 
 		for ( storage in _componentStorage ) {
@@ -170,24 +174,34 @@ class World {
 		return macro {@:privateAccess $ethis.services.set( $v{util.Macros.getTypeIdentifier( cl )}, $value );};
 	}
 
-	public function getOrCreateView<T : ViewBase>( cl : Class<T> ) : T {
+	public function getOrCreateQuery<T : QueryBase>( cl : Class<T> ) : T {
 
 		final id : Int = untyped cl.__global_id__;
 
-		if ( viewStorage[id] == null ) {
-			viewStorage[id] = Type.createInstance( cl, [this] );
+		if ( queryStorage[id] == null ) {
+			queryStorage[id] = Type.createInstance( cl, [this] );
 		}
 
-		return cast viewStorage[id];
+		return cast queryStorage[id];
 	}
 
-	public function addView<T : ViewBase>( cl : Class<T>, view : T ) {
+	@:deprecated( "Use getOrCreateQuery() instead." )
+	public inline function getOrCreateView<T : QueryBase>( cl : Class<T> ) : T {
+		return getOrCreateQuery( cl );
+	}
+
+	public function addQuery<T : QueryBase>( cl : Class<T>, query : T ) {
 		final id : Int = untyped cl.__global_id__;
 
-		if ( viewStorage[id] != null )
-			trace( 'attaching an already existing view with id ${id}' );
+		if ( queryStorage[id] != null )
+			trace( 'attaching an already existing query with id ${id}' );
 
-		viewStorage[id] = view;
+		queryStorage[id] = query;
+	}
+
+	@:deprecated( "Use addQuery() instead." )
+	public inline function addView<T : QueryBase>( cl : Class<T>, query : T ) : Void {
+		addQuery( cl, query );
 	}
 
 	@:allow( echoes.SystemList )
@@ -300,68 +314,84 @@ class World {
 	}
 
 	/**
-	 * Gets an inactive `View` of the given components. The calling class should
+	 * Gets an inactive `Query` of the given components. The calling class should
 	 * call `activate()` before attempting to use it.
-	 * @see `getView()` to automatically activate the view.
+	 * @see `getQuery()` to automatically activate the query.
 	 */
+	#if macro static #else macro #end
+	public function getInactiveQuery(
+		world : ExprOf<World>,
+		componentTypes : Array<ExprOf<Class<Any>>>
+	) : Expr {
+		final normalized = normalizeQueryArguments( componentTypes );
+		final componentComplexTypes : Array<ComplexType> = [for ( type in normalized.components )
+			MacroTools.parseClassExpr( type )];
+		final excludedComplexTypes : Array<ComplexType> = [for ( type in normalized.excluded )
+			MacroTools.parseClassExpr( type )];
+
+		final queryName : String = QueryBuilder.getQueryName( componentComplexTypes, excludedComplexTypes );
+		QueryBuilder.createQueryType( componentComplexTypes, excludedComplexTypes );
+
+		return macro Std.downcast( $world.getOrCreateQuery( $i{queryName} ), $i{queryName} );
+	}
+
+	@:deprecated( "Use getInactiveQuery() instead." )
 	#if macro static #else macro #end
 	public function getInactiveView(
 		world : ExprOf<World>,
-		componentTypes : ExprOf<Array<Class<Any>>>,
-		?excludedComponents : ExprOf<Array<Class<Any>>>
+		componentTypes : Array<ExprOf<Class<Any>>>
 	) : Expr {
-
-		final componentComplexTypes : Array<ComplexType> = [];
-		switch componentTypes.expr {
-			case EArrayDecl( values ):
-				for ( type in values ) {
-					componentComplexTypes.push( MacroTools.parseClassExpr( type ) );
-				}
-			case _e:
-				throw '$_e should be an Array!';
-		}
-
-		final excludedComplexTypes : Array<ComplexType> = [];
-		switch excludedComponents.expr {
-			case EArrayDecl( values ):
-				for ( type in values ) {
-					excludedComplexTypes.push( MacroTools.parseClassExpr( type ) );
-				}
-			case EConst( CIdent( id ) ):
-			case _e:
-				throw '$_e is not supported!';
-		}
-
-		final viewName : String = ViewBuilder.getViewName( componentComplexTypes, excludedComplexTypes );
-		ViewBuilder.createViewType( componentComplexTypes, excludedComplexTypes );
-
-		return macro Std.downcast( $world.getOrCreateView( $i{viewName} ), $i{viewName} );
+		return World.getInactiveQuery( world, componentTypes );
 	}
 
+	#if macro
+	private static function normalizeQueryArguments( arguments : Array<Expr> ) : {
+		components : Array<Expr>,
+		excluded : Array<Expr>
+	} {
+		return switch ( arguments ) {
+			case [{ expr : EArrayDecl( components ) }, { expr : EArrayDecl( excluded ) }]:
+				{ components : components, excluded : excluded };
+			case [{ expr : EArrayDecl( components ) }]:
+				{ components : components, excluded : [] };
+			default:
+				{ components : arguments, excluded : [] };
+		};
+	}
+	#end
+
 	/**
-	 * Gets an active `View` of the given components. The calling class should
+	 * Gets an active `Query` of the given components. The calling class should
 	 * call `deactivate()` once done using it.
 	 * 
 	 * Sample usage:
 	 * 
 	 * ```haxe
-	 * var view:View<A, B, C> = Echoes.getView(A, B, C);
-	 * trace(view.entities.length);
-	 * view.onAdded.push((entity:Entity, a:A, b:B, c:C) -> trace(a + b * c));
+	 * var query:Query<A, B, C> = Echoes.getQuery(A, B, C);
+	 * trace(query.entities.length);
+	 * query.onAdded.push((entity:Entity, a:A, b:B, c:C) -> trace(a + b * c));
 	 * ```
 	 */
 	#if macro static #else macro #end
-	public function getView(
+	public function getQuery(
 		world : ExprOf<World>,
-		componentTypes : ExprOf<Array<Class<Any>>>,
-		?excludedComponents : ExprOf<Array<Class<Any>>>
+		componentTypes : Array<ExprOf<Class<Any>>>
 	) : Expr {
-		final view : Expr = World.getInactiveView( world, componentTypes, excludedComponents );
+		final query : Expr = World.getInactiveQuery( world, componentTypes );
 
 		return macro {
-			$view.activate();
-			$view;
+			$query.activate();
+			$query;
 		};
+	}
+
+	@:deprecated( "Use getQuery() instead." )
+	#if macro static #else macro #end
+	public function getView(
+		world : ExprOf<World>,
+		componentTypes : Array<ExprOf<Class<Any>>>
+	) : Expr {
+		return World.getQuery( world, componentTypes );
 	}
 }
 
@@ -369,7 +399,7 @@ typedef AppStatistics = {
 	var cachedEntities : Int;
 	var entities : Int;
 	var systems : Array<SystemDetails>;
-	var views : Array<{
+	var queries : Array<{
 		var name : String;
 		var entities : Int;
 	}>;

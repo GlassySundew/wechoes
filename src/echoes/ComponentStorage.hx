@@ -1,7 +1,7 @@
 package echoes;
 
 import echoes.Entity;
-import echoes.View;
+import echoes.Query;
 import echoes.macro.ComponentStorageBuilder;
 import echoes.utils.ComponentTypes;
 import echoes.utils.ReadOnlyData;
@@ -42,15 +42,21 @@ class ComponentStorage<T> {
 	private final ongoingRemovals : Array<Int> = [];
 
 	/**
-	 * All views that include this type of component.
+	 * All queries that include this type of component.
 	 */
-	public var relatedViews( get, never ) : ReadOnlyArray<ViewBase>;
-	private inline function get_relatedViews() : ReadOnlyArray<ViewBase> {
-		return _relatedViews;
+	public var relatedQueries( get, never ) : ReadOnlyArray<QueryBase>;
+	private inline function get_relatedQueries() : ReadOnlyArray<QueryBase> {
+		return _relatedQueries;
+	}
+
+	@:deprecated( "Use relatedQueries instead." )
+	public var relatedViews( get, never ) : ReadOnlyArray<QueryBase>;
+	private inline function get_relatedViews() : ReadOnlyArray<QueryBase> {
+		return relatedQueries;
 	}
 
 	@:allow( echoes.DynamicComponentStorage )
-	private final _relatedViews : Array<ViewBase> = [];
+	private final _relatedQueries : Array<QueryBase> = [];
 
 	/**
 	 * As `componentType`, except without package information. This is easier to
@@ -111,9 +117,9 @@ class ComponentStorage<T> {
 
 		if ( entity.isActive( world ) ) {
 			var exception : Exception = null;
-			for ( view in relatedViews ) {
+			for ( query in relatedQueries ) {
 				try {
-					view.add( entity );
+					query.add( entity );
 				} catch( e : Exception ) {
 					if ( exception == null ) {
 						exception = e;
@@ -177,9 +183,9 @@ class ComponentStorage<T> {
 				ongoingRemovals.push( entity.id );
 
 				var exception : Exception = null;
-				for ( view in relatedViews ) {
+				for ( query in relatedQueries ) {
 					try {
-						view.remove( entity, this, removedComponent );
+						query.remove( entity, this, removedComponent );
 					} catch( e : Exception ) {
 						if ( exception == null ) {
 							exception = e;
@@ -289,17 +295,17 @@ class ComponentStorage<T> {
  * add components, use `new ComponentStorage<Dynamic>()` instead. Obviously, no
  * type checking will be performed.
  */
-@:forward( clear, componentType, exists, get, name, relatedViews, remove, removeAll, shortComponentType, add )
+@:forward( clear, componentType, exists, get, name, relatedQueries, relatedViews, remove, removeAll, shortComponentType, add )
 abstract DynamicComponentStorage( ComponentStorage<Dynamic> ) to ComponentStorage<Any> {
 
 	@:from private static inline function fromComponentStorage<T>( componentStorage : ComponentStorage<T> ) : DynamicComponentStorage {
 		return cast componentStorage;
 	}
 
-	@:allow( echoes.ViewBase )
-	private var _relatedViews( get, never ) : Array<ViewBase>;
-	private inline function get__relatedViews() : Array<ViewBase> {
-		return this._relatedViews;
+	@:allow( echoes.QueryBase )
+	private var _relatedQueries( get, never ) : Array<QueryBase>;
+	private inline function get__relatedQueries() : Array<QueryBase> {
+		return this._relatedQueries;
 	}
 }
 

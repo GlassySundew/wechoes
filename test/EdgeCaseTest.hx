@@ -7,7 +7,7 @@ import Components.Color as ColorAlias;
 import echoes.Entity;
 import echoes.System;
 import echoes.SystemList;
-import echoes.View;
+import echoes.Query;
 import haxe.PosInfos;
 import MethodCounter.assertTimesCalled;
 import MethodCounter.IMethodCounter;
@@ -267,21 +267,21 @@ class EdgeCaseTest extends Test {
 		//Certain events should stop propagating after `RecursiveEventSystem`
 		//gets to them. On some targets, this can happen when the entity ID is 0
 		//and reading past the end of an int array returns 0 instead of null.
-		world.getView( One, Two).onAdded.push((entity, one, two)
+		world.getQuery( One, Two).onAdded.push((entity, one, two)
 			-> Assert.fail('ComponentStorage.add() didn\'t stop iterating despite One component being removed from entity ${ entity.id }.'));
-		world.getView( Two, Three).onAdded.push((entity, two, three)
+		world.getQuery( Two, Three).onAdded.push((entity, two, three)
 			-> Assert.fail('ComponentStorage.add() didn\'t stop iterating despite Two component being removed from entity ${ entity.id }.'));
-		world.getView( Brief, One).onAdded.push((entity, brief, one)
+		world.getQuery( Brief, One).onAdded.push((entity, brief, one)
 			-> Assert.fail('ComponentStorage.add() didn\'t stop iterating despite Brief component being removed from entity ${ entity.id }.'));
-		world.getView( Brief).onAdded.push((entity, brief)
-			-> Assert.fail('ViewBuilder.dispatchAddedCallback() didn\'t stop iterating despite Brief component being removed from entity ${ entity.id }.'));
+		world.getQuery( Brief).onAdded.push((entity, brief)
+			-> Assert.fail('QueryBuilder.dispatchAddedCallback() didn\'t stop iterating despite Brief component being removed from entity ${ entity.id }.'));
 		
 		//However, `RecursiveEventSystem` shouldn't be able to interrupt
 		//`onRemoved` events.
 		var permanentRemoveFlags:Int = 0;
-		world.getView(Permanent).onRemoved.push((entity, permanent)
+		world.getQuery(Permanent).onRemoved.push((entity, permanent)
 			-> permanentRemoveFlags |= 1);
-		world.getView(Permanent, One).onRemoved.push((entity, permanent, one)
+		world.getQuery(Permanent, One).onRemoved.push((entity, permanent, one)
 			-> permanentRemoveFlags |= 2);
 		
 		//Test components that add/remove other components.
@@ -338,11 +338,11 @@ class EdgeCaseTest extends Test {
 		
 		entity0.add(world, "remove");
 		entity1.add(world, "keep");
-		Assert.equals(2, world.getView(String).entities.length);
+		Assert.equals(2, world.getQuery(String).entities.length);
 		
 		world.update();
 		assertTimesCalled(2, "RemoveStringSystem.removeString");
-		Assert.equals(1, world.getView(String).entities.length);
+		Assert.equals(1, world.getQuery(String).entities.length);
 		
 		entity0.add(world, "remove");
 		entity1.add(world, "keep");
@@ -350,29 +350,29 @@ class EdgeCaseTest extends Test {
 		MethodCounter.reset();
 		world.update();
 		assertTimesCalled(3, "RemoveStringSystem.removeString");
-		Assert.equals(1, world.getView(String).entities.length);
+		Assert.equals(1, world.getQuery(String).entities.length);
 		
 		entity0.add(world, "remove");
 		entity1.add(world, "keep");
 		entity2.add(world, "remove");
 		MethodCounter.reset();
-		world.getView(String).iter(system.removeString);
+		world.getQuery(String).iter(system.removeString);
 		assertTimesCalled(3, "RemoveStringSystem.removeString");
-		Assert.equals(1, world.getView(String).entities.length);
+		Assert.equals(1, world.getQuery(String).entities.length);
 		
-		final view:DynamicView = new DynamicView(world, [world.getComponentStorage(Bool)]);
-		view.activate();
+		final query:DynamicQuery = new DynamicQuery(world, [world.getComponentStorage(Bool)]);
+		query.activate();
 		var count:Int = 0;
 		entity0.add(world, false);
 		entity1.add(world, true);
 		entity2.add(world, true);
-		view.iter((entity, components) -> {
+		query.iter((entity, components) -> {
 			count++;
 			if(components[0] == true) {
 				entity.remove(world, Bool);
 			}
 		});
-		Assert.equals(1, view.entities.length);
+		Assert.equals(1, query.entities.length);
 		Assert.equals(3, count);
 	}
 	

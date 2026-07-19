@@ -1,5 +1,7 @@
 package echoes.macro;
 
+import echoes.macro.internal.storage.StorageRegistry;
+
 #if macro
 import haxe.macro.CompilationServer;
 import haxe.macro.Expr;
@@ -12,24 +14,14 @@ using haxe.macro.Context;
 using haxe.macro.ComplexTypeTools;
 #end
 
-var storageIdInc = 0;
-
-final storageCache : Map<String, Int> = new Map();
-
 function reserveStorageId( type : String ) : Int {
-
-	if ( storageCache[type] == null )
-		storageCache[type] = storageIdInc++;
-
-	return storageCache[type];
+	return StorageRegistry.reserve( type );
 }
 
 #if macro
 class ComponentStorageBuilder {
 
 	public static inline final PREFIX : String = "ComponentStorage_";
-
-	private static var registered : Bool = false;
 
 	public static #if !debug inline #end function getComponentStorage(
 		world : ExprOf<World>,
@@ -90,44 +82,7 @@ class ComponentStorageBuilder {
 		}
 
 		final storageTypeName : String = PREFIX + componentComplexType.toIdentifier();
-		if ( storageCache.exists( storageTypeName ) ) {
-			return storageCache[storageTypeName];
-		}
-
-		return storageCache[storageTypeName] = storageIdInc++;
-
-		// final componentTypeName:String = new Printer().printComplexType(componentComplexType);
-		// final storageTypePath:TypePath = { pack: [], name: storageTypeName };
-		// var getInstance:Expr = macro new echoes.ComponentStorage<$componentComplexType>($v{ componentTypeName });
-
-		// //If a custom singleton is defined, use that instead.
-		// final componentBaseType:BaseType = componentComplexType.toType().toBaseType();
-		// final meta:MetaAccess = componentBaseType != null ? componentBaseType.meta : null;
-		// if(meta != null) {
-		// 	switch(meta.extract(":echoes_storage")) {
-		// 		case null, []:
-		// 		case x if(componentBaseType.params.length > 0):
-		// 			Context.error("@:echoes_storage doesn't work with type params, for type " + new Printer().printComplexType(componentComplexType), Context.currentPos());
-		// 		case [_.params => [customSingleton]]:
-		// 			getInstance = customSingleton;
-		// 		default:
-		// 	}
-		// }
-
-		// final def:TypeDefinition = macro class $storageTypeName {
-		// 	// public static final instance:echoes.ComponentStorage<$componentComplexType> = $getInstance;
-		// };
-
-		// storageCache.set(storageTypeName, def);
-		// if(!registered) {
-		// 	registered = true;
-		// 	Context.onTypeNotFound(storageCache.get);
-		// }
-
-		// Report.componentNames.push(componentTypeName);
-		// Report.registerCallback();
-
-		// return storageTypeName;
+		return StorageRegistry.reserve( storageTypeName );
 	}
 
 	public static function invalidate() : Void {

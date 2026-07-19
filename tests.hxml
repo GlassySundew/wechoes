@@ -2,7 +2,8 @@
 # -v
 -cp src
 -cp test
--lib hxToolShed
+-lib hx-bleh
+-lib haxe-concurrent
 -lib utest
 -main Main
 -dce full

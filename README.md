@@ -9,7 +9,7 @@ This framework was [designed and implemented by deepcake](https://github.com/dee
 - An [entity](src/echoes/Entity.hx) is a collection of components. It fills a similar role to object instances in object-oriented programming, but functions differently. Its components aren't pre-defined the way an object's variables are; in fact, you can mix and match them at runtime.
   - Usage: Create an entity with `entity = new echoes.Entity()`. Next, call `entity.add(new Component())` for each component you want to add.
 - A [system](src/echoes/System.hx) updates and modifies entities. Whereas in object-oriented programming, objects usually have instance methods to update themselves, here that job is reserved for systems.
-  - Systems use [views](src/echoes/View.hx) to filter entities. `View<A, B>` lists all entities with both the `A` component and the `B` component, which is convenient when a system wants to modify that specific data.
+  - Systems use [queries](src/echoes/Query.hx) to filter entities. `Query<A, B>` lists all entities with both the `A` component and the `B` component, which is convenient when a system wants to modify that specific data.
   - Usage: Create a class that extends `echoes.System`, and write functions that take components as arguments. Echoes will automatically find entities with those components, allowing you to modify the data. See [usage](#usage) for details.
 - The [`Echoes` class](src/echoes/Echoes.hx) tracks all active entities and systems.
   - Usage: Call `Echoes.init()` when the app loads, then call `Echoes.addSystem()` to activate each of your systems.
@@ -175,10 +175,10 @@ class MovementSystem extends System {
 	}
 	
 	/**
-	 * This `View` object lists every entity with a `Velocity`. Because the
-	 * `View` constructor is private, you must call `getLinkedView()` instead.
+	 * This `Query` object lists every entity with a `Velocity`. Because the
+	 * `Query` constructor is private, you must call `getLinkedQuery()` instead.
 	 */
-	private var velocityView:View<Velocity> = getLinkedView(Velocity);
+	private var velocityQuery:Query<Velocity> = getLinkedQuery(Velocity);
 	
 	/**
 	 * Because `Float` is a special case, this function behaves like
@@ -196,7 +196,7 @@ class MovementSystem extends System {
 			
 			//Iterate through all entities with `Velocity` components, and make
 			//them all stop moving.
-			for(entity in velocityView.entities) {
+			for(entity in velocityQuery.entities) {
 				var velocity:Velocity = entity.get(Velocity);
 				velocity.x = 0;
 				velocity.y = 0;
@@ -218,7 +218,7 @@ When you take an argument of either type, instead of getting a component as norm
 	position.y += velocity.y * time;
 }
 
-//Taking an `Entity` argument allows you to view and modify components.
+//Taking an `Entity` argument allows you to query and modify components.
 @:update private function stopIfOutOfBounds(position:Position, entity:Entity):Void {
 	//entity.get() is just a little more verbose, but does the same thing.
 	if(position != entity.get(Position)) {
@@ -580,14 +580,28 @@ Additional notes:
 Echoes offers a few ways to customize compilation.
 
 - `-Dechoes_profiling` turns on time tracking. With this flag enabled, `Echoes.getStatistics()` will include the amount of time spent on each system during the most recent update.
-- `-Dechoes_report` prints a list of all compiled components and views.
+- `-Dechoes_report` prints a list of all compiled components and queries.
 - `-Dechoes_max_name_length=[number]` adjusts the length of generated class names, which can help if you exceed your operating system's filename length limit.
 
 ## Breaking changes
 
+### Query terminology
+
+The former `View` family has been renamed to `Query`, which better describes
+its role as a filtered selection of entities:
+
+- `View`, `ViewBase`, and `DynamicView` are now `Query`, `QueryBase`, and
+  `DynamicQuery`.
+- `getView()`, `getInactiveView()`, and `getLinkedView()` are now `getQuery()`,
+  `getInactiveQuery()`, and `getLinkedQuery()`.
+- `activeViews` and `relatedViews` are now `activeQueries` and
+  `relatedQueries`.
+
+Deprecated compatibility aliases remain available for migration.
+
 ### Since v1.0.0
 
-- Creating a view with two of the same component is now an error.
+- Creating a query with two of the same component is now an error.
 
 ### Since v1.0.0-rc.5
 

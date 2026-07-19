@@ -8,7 +8,7 @@ import echoes.System;
 import echoes.SystemList;
 import echoes.utils.ComponentTypes;
 import echoes.utils.Signal;
-import echoes.View;
+import echoes.Query;
 import haxe.PosInfos;
 import MethodCounter.assertTimesCalled;
 import Systems;
@@ -61,18 +61,18 @@ class AdvancedFunctionalityTest extends Test {
 		Assert.isFalse( world.getComponentStorage( EagerIntArray ) is IntArrayStorage );
 	}
 
-	private function testDynamicViews() : Void {
+	private function testDynamicQueries() : Void {
 		var world = new World();
 
 		final componentStorage0 : ComponentStorage<Any> = new ComponentStorage<Any>( world, "component0" );
 		final componentStorage1 : ComponentStorage<Any> = new ComponentStorage<Any>( world, "component1" );
 
-		final view : DynamicView = new DynamicView( world, [componentStorage0, componentStorage1] );
-		view.activate();
+		final query : DynamicQuery = new DynamicQuery( world, [componentStorage0, componentStorage1] );
+		query.activate();
 		var added : String = "";
-		view.onAdded.add( ( entity, components ) -> added += components.join( "" ) );
+		query.onAdded.add( ( entity, components ) -> added += components.join( "" ) );
 		var removed : String = "";
-		view.onRemoved.add( ( entity, components ) -> removed += components.join( "" ) );
+		query.onRemoved.add( ( entity, components ) -> removed += components.join( "" ) );
 
 		final entity0 : Entity = new Entity( world );
 		componentStorage0.add( entity0, "---", world );
@@ -93,7 +93,7 @@ class AdvancedFunctionalityTest extends Test {
 		Assert.equals( "", removed );
 
 		var updated : String = "";
-		view.iter( ( entity, components ) -> updated += components.join( "" ) );
+		query.iter( ( entity, components ) -> updated += components.join( "" ) );
 		Assert.equals( "ab01", updated );
 
 		componentStorage1.remove( entity1, world );
@@ -350,7 +350,7 @@ class AdvancedFunctionalityTest extends Test {
 		var world = new World();
 
 		var addNameCount : Int = 0;
-		final named : View<Name> = world.getView( Name );
+		final named : Query<Name> = world.getQuery( Name );
 		named.onAdded.add( ( entity, name ) -> {
 			addNameCount++;
 		} );
@@ -500,7 +500,7 @@ class AdvancedFunctionalityTest extends Test {
 		Assert.isTrue( entity.exists( world, ( _ : Array<Int> ) ), null );
 	}
 
-	private function testViews() : Void {
+	private function testQueries() : Void {
 		// Make several entities with varying components.
 		var world = new World();
 
@@ -509,51 +509,56 @@ class AdvancedFunctionalityTest extends Test {
 		final colorNameEntity : Entity = new Entity( world ).add( world, ( 0x00FF00 : Color ), ( "name2" : Name ) );
 		final colorShapeEntity : Entity = new Entity( world ).add( world, ( 0xFFFFFF : Color ), STAR );
 
-		// Make some views; each should see a different selection of entities.
-		final viewOfName : View<Name> = world.getView( Name );
-		Assert.equals( 2, viewOfName.entities.length );
-		Assert.isTrue( viewOfName.entities.contains( nameEntity ) );
-		Assert.isTrue( viewOfName.entities.contains( colorNameEntity ) );
+		// Make some queries; each should see a different selection of entities.
+		final queryOfName : Query<Name> = world.getQuery( Name );
+		Assert.equals( 2, queryOfName.entities.length );
+		Assert.isTrue( queryOfName.entities.contains( nameEntity ) );
+		Assert.isTrue( queryOfName.entities.contains( colorNameEntity ) );
 
-		final viewOfShape : View<Shape> = world.getView( Shape );
-		Assert.equals( 2, viewOfShape.entities.length );
-		Assert.isTrue( viewOfShape.entities.contains( shapeEntity ) );
-		Assert.isTrue( viewOfShape.entities.contains( colorShapeEntity ) );
+		final queryOfShape : Query<Shape> = world.getQuery( Shape );
+		Assert.equals( 2, queryOfShape.entities.length );
+		Assert.isTrue( queryOfShape.entities.contains( shapeEntity ) );
+		Assert.isTrue( queryOfShape.entities.contains( colorShapeEntity ) );
+
+		// Array syntax additionally supports an explicit exclusion list.
+		final namesWithoutColor = world.getQuery( [Name], [Color] );
+		Assert.equals( 1, namesWithoutColor.entities.length );
+		Assert.isTrue( namesWithoutColor.entities.contains( nameEntity ) );
 
 		// Test `iter()`.
 		var joinedNames : String = "";
-		viewOfName.iter( ( e : Entity, n : Name ) -> joinedNames += n );
+		queryOfName.iter( ( e : Entity, n : Name ) -> joinedNames += n );
 		Assert.equals( "name1name2", joinedNames );
 
 		// Remove a component.
 		colorNameEntity.remove( world, Name );
-		Assert.equals( 1, viewOfName.entities.length );
-		Assert.isFalse( viewOfName.entities.contains( colorNameEntity ) );
+		Assert.equals( 1, queryOfName.entities.length );
+		Assert.isFalse( queryOfName.entities.contains( colorNameEntity ) );
 
-		// Make a view that's linked to a system.
+		// Make a query that's linked to a system.
 		final nameSystem : NameSystem = new NameSystem( world );
-		final colorView : View<Color> = nameSystem.getLinkedView( Color );
-		Assert.isFalse( colorView.active );
-		Assert.equals( 0, colorView.entities.length );
+		final colorQuery : Query<Color> = nameSystem.getLinkedQuery( Color );
+		Assert.isFalse( colorQuery.active );
+		Assert.equals( 0, colorQuery.entities.length );
 
-		// Adding/removing the system should activate/deactivate the linked view.
+		// Adding/removing the system should activate/deactivate the linked query.
 		nameSystem.activate();
-		Assert.isTrue( colorView.active );
-		Assert.equals( 2, colorView.entities.length );
-		Assert.isTrue( colorView.entities.contains( colorNameEntity ) );
-		Assert.isTrue( colorView.entities.contains( colorShapeEntity ) );
+		Assert.isTrue( colorQuery.active );
+		Assert.equals( 2, colorQuery.entities.length );
+		Assert.isTrue( colorQuery.entities.contains( colorNameEntity ) );
+		Assert.isTrue( colorQuery.entities.contains( colorShapeEntity ) );
 
 		nameSystem.deactivate();
-		Assert.isFalse( colorView.active );
-		Assert.equals( 0, colorView.entities.length );
+		Assert.isFalse( colorQuery.active );
+		Assert.equals( 0, colorQuery.entities.length );
 	}
 
-	private function testViewSignals() : Void {
+	private function testQuerySignals() : Void {
 		var world = new World();
 
 		final entity : Entity = new Entity( world );
 
-		final viewOfShape : View<Shape> = world.getView( Shape );
+		final queryOfShape : Query<Shape> = world.getQuery( Shape );
 
 		var signalDispatched : Bool = false;
 		function listener( e : Entity, s : Shape ) : Void {
@@ -564,16 +569,37 @@ class AdvancedFunctionalityTest extends Test {
 		}
 
 		// Test onAdded.
-		viewOfShape.onAdded.push( listener );
+		queryOfShape.onAdded.push( listener );
 
 		entity.add( world, STAR );
 		Assert.isTrue( signalDispatched );
 
 		// Test onRemoved.
-		viewOfShape.onRemoved.push( listener );
+		queryOfShape.onRemoved.push( listener );
 		signalDispatched = false;
 		entity.removeAll( world );
 		Assert.isTrue( signalDispatched );
+	}
+
+	private function testViewCompatibility() : Void {
+		final world = new World();
+		final entity = new Entity( world ).add( world, ( "legacy" : Name ) );
+		final legacyQuery : echoes.View<Name> = world.getView( Name );
+
+		Assert.isTrue( legacyQuery.entities.contains( entity ) );
+		Assert.isTrue( world.activeViews.contains( legacyQuery ) );
+		Assert.isTrue( world.getComponentStorage( Name ).relatedViews.contains( legacyQuery ) );
+
+		final system = new NameSystem( world );
+		final linkedQuery : echoes.View<Color> = system.getLinkedView( Color );
+		Assert.isFalse( linkedQuery.active );
+
+		final legacyDynamic : echoes.View.DynamicView = new echoes.View.DynamicView(
+			world,
+			[world.getComponentStorage( Name )]
+		);
+		legacyDynamic.activate();
+		Assert.isTrue( legacyDynamic.entities.contains( entity ) );
 	}
 }
 

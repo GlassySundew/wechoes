@@ -2,10 +2,10 @@ package echoes.macro;
 
 #if macro
 import haxe.Exception;
-import haxe.macro.Compiler;
 import haxe.macro.Expr;
 import haxe.macro.Printer;
 import haxe.macro.Type;
+import echoes.macro.internal.CompilerSetup;
 
 using haxe.macro.ComplexTypeTools;
 using haxe.macro.Context;
@@ -225,15 +225,7 @@ class MacroTools {
 	}
 
 	public static function registerDescriptionFiles() : Void {
-		#if( haxe_ver >= 4.3 )
-		var path : String = ( ( ?infos : haxe.PosInfos ) -> infos.fileName )();
-		if ( !StringTools.endsWith( path, "src/echoes/macro/MacroTools.hx" ) ) {
-			throw "MacroTools.hx moved, please update its path.";
-		}
-		path = path.substring( 0, path.length - "src/echoes/macro/MacroTools.hx".length );
-
-		Compiler.registerMetadataDescriptionFile( path + "meta.json", "echoes" );
-		#end
+		CompilerSetup.registerMetadataDescriptions();
 	}
 
 	/**

@@ -35,42 +35,8 @@ class EntityTools {
 		components : Array<Expr>
 	) : ExprOf<echoes.Entity> {
 
-		final duplicateAdditionChecks = [];
-
-		final pos = Context.currentPos();
-
-		for ( component in components ) {
-
-			final type : Type = MacroTools.parseComponentType( component );
-			final compComplex = Context.toComplexType( type );
-			final name = switch compComplex {
-				case TPath( p ):
-					p.sub;
-				default: compComplex + " not supported";
-			}
-
-			duplicateAdditionChecks.push(
-				macro @:pos( pos ) if( ${
-					EntityTools.exists(
-						macro __entity__,
-						world,
-						compComplex
-					)
-				} ) {
-
-					@:pos( pos ) throw new haxe.Exception(
-						"adding duplicate component: { "
-						+ $v{name}
-						+ " } over to an entity: " + __entity__
-					);
-				}
-			);
-		}
-
 		return macro @:pos( Context.currentPos() ) {
 			final __entity__ : echoes.Entity = $self;
-
-			$b{duplicateAdditionChecks};
 
 			$b{
 				[for ( component in components ) {

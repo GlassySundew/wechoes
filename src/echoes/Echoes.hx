@@ -3,17 +3,17 @@
 // import echoes.Entity;
 // import echoes.utils.Clock;
 // import echoes.utils.ReadOnlyData;
-// import echoes.View;
+// import echoes.Query;
 // import haxe.Serializer;
 // import haxe.Unserializer;
 // #if macro
 // import haxe.macro.Expr;
 // import echoes.macro.ComponentStorageBuilder;
 // import echoes.macro.MacroTools;
-// import echoes.macro.ViewBuilder;
+// import echoes.macro.QueryBuilder;
 // // using echoes.macro.ComponentStorageBuilder;
 // // using echoes.macro.MacroTools;
-// // using echoes.macro.ViewBuilder;
+// // using echoes.macro.QueryBuilder;
 // // using haxe.macro.Context;
 // #end
 // class Echoes {
@@ -43,15 +43,15 @@
 // 	 */
 // 	@:allow(echoes.Entity)
 // 	private static final activeEntityIndices:Array<Null<Int>> = [];
-// 	@:allow(echoes.ViewBase)
-// 	private static final _activeViews:Array<ViewBase> = [];
+// 	@:allow(echoes.QueryBase)
+// 	private static final _activeQueries:Array<QueryBase> = [];
 // 	/**
-// 	 * All currently-active views.
+// 	 * All currently-active queries.
 // 	 */
-// 	public static var activeViews(get, never):ReadOnlyArray<ViewBase>;
-// 	private static inline function get_activeViews():ReadOnlyArray<ViewBase> return _activeViews;
+// 	public static var activeQueries(get, never):ReadOnlyArray<QueryBase>;
+// 	private static inline function get_activeQueries():ReadOnlyArray<QueryBase> return _activeQueries;
 // 	/**
-// 	 * All currently-active systems. Unlike `activeEntities` and `activeViews`,
+// 	 * All currently-active systems. Unlike `activeEntities` and `activeQueries`,
 // 	 * this is not a flat array, but rather the root node of a tree: it may
 // 	 * contain `SystemList`s containing `SystemList`s. All active systems will
 // 	 * be somewhere in this tree.
@@ -108,10 +108,10 @@
 // 			cachedEntities: Entity.idPool.length,
 // 			entities: activeEntities.length,
 // 			systems: [for(system in activeSystems) system.getStatistics()],
-// 			views: [for(view in activeViews)
+// 			queries: [for(query in activeQueries)
 // 				{
-// 					name: Std.string(view),
-// 					entities: view.entities.length
+// 					name: Std.string(query),
+// 					entities: query.entities.length
 // 				}]
 // 		};
 // 	}
@@ -128,7 +128,7 @@
 // 		#end
 // 	}
 // 	/**
-// 	 * Deactivates all views and systems, destroys all entities, and cancels the
+// 	 * Deactivates all queries and systems, destroys all entities, and cancels the
 // 	 * automatic updates started during `init()`.
 // 	 */
 // 	public static function reset():Void {
@@ -136,9 +136,9 @@
 // 		_activeEntities.resize(0);
 // 		activeSystems.removeAll();
 // 		//Iterate backwards when removing items from arrays.
-// 		var i:Int = activeViews.length;
+// 		var i:Int = activeQueries.length;
 // 		while(--i >= 0) {
-// 			activeViews[i].reset();
+// 			activeQueries[i].reset();
 // 		}
 // 		for(storage in _componentStorage) {
 // 			storage.clear();
@@ -169,33 +169,33 @@
 // 	// 	return ComponentStorageBuilder.getComponentStorage(MacroTools.parseClassExpr(componentType));
 // 	// }
 // 	/**
-// 	 * Gets an inactive `View` of the given components. The calling class should
+// 	 * Gets an inactive `Query` of the given components. The calling class should
 // 	 * call `activate()` before attempting to use it.
-// 	 * @see `getView()` to automatically activate the view.
+// 	 * @see `getQuery()` to automatically activate the query.
 // 	 */
-// 	// public static #if !macro macro #end function getInactiveView(componentTypes:Array<ExprOf<Class<Any>>>):Expr {
+// 	// public static #if !macro macro #end function getInactiveQuery(componentTypes:Array<ExprOf<Class<Any>>>):Expr {
 // 	// 	final componentComplexTypes:Array<ComplexType> = [for(type in componentTypes) MacroTools.parseClassExpr(type)];
-// 	// 	final viewName:String = ViewBuilder.getViewName(componentComplexTypes);
-// 	// 	ViewBuilder.createViewType(componentComplexTypes);
-// 	// 	return macro $i{ viewName }.instance;
+// 	// 	final queryName:String = QueryBuilder.getQueryName(componentComplexTypes);
+// 	// 	QueryBuilder.createQueryType(componentComplexTypes);
+// 	// 	return macro $i{ queryName }.instance;
 // 	// }
 // 	/**
-// 	 * Gets an active `View` of the given components. The calling class should
+// 	 * Gets an active `Query` of the given components. The calling class should
 // 	 * call `deactivate()` once done using it.
 // 	 *
 // 	 * Sample usage:
 // 	 *
 // 	 * ```haxe
-// 	 * var view:View<A, B, C> = Echoes.getView(A, B, C);
-// 	 * trace(view.entities.length);
-// 	 * view.onAdded.push((entity:Entity, a:A, b:B, c:C) -> trace(a + b * c));
+// 	 * var query:Query<A, B, C> = Echoes.getQuery(A, B, C);
+// 	 * trace(query.entities.length);
+// 	 * query.onAdded.push((entity:Entity, a:A, b:B, c:C) -> trace(a + b * c));
 // 	 * ```
 // 	 */
-// 	// public static #if !macro macro #end function getView(componentTypes:Array<ExprOf<Class<Any>>>):Expr {
-// 	// 	final view:Expr = getInactiveView(componentTypes);
+// 	// public static #if !macro macro #end function getQuery(componentTypes:Array<ExprOf<Class<Any>>>):Expr {
+// 	// 	final query:Expr = getInactiveQuery(componentTypes);
 // 	// 	return macro {
-// 	// 		$view.activate();
-// 	// 		$view;
+// 	// 		$query.activate();
+// 	// 		$query;
 // 	// 	};
 // 	// }
 // 	//Serialization
@@ -250,7 +250,7 @@
 // 	var cachedEntities:Int;
 // 	var entities:Int;
 // 	var systems:Array<SystemDetails>;
-// 	var views:Array<{
+// 	var queries:Array<{
 // 		var name:String;
 // 		var entities:Int;
 // 	}>;

@@ -45,7 +45,7 @@ class EntityTemplateBuilder {
 		}
 
 		// Get information about parent types.
-		final parents : Array<{complexType : ComplexType, abstractType : AbstractType }> = [];
+		final parents : Array<TemplateParent> = [];
 		var nextParent : Type = type.type;
 		for ( _ in 0...100 ) {
 			switch ( nextParent.follow() ) {
@@ -103,7 +103,7 @@ class EntityTemplateBuilder {
 		 * Contains a temporary `storage` value, which is the identifier for the
 		 * `ComponentStorage` for this type.
 		 */
-		final parameters : Array<FunctionArg & { storageId : Int }> = [];
+		final parameters : Array<TemplateParameter> = [];
 
 		/**
 		 * Arguments to pass to `applyTemplateToSelf()`.
@@ -118,7 +118,7 @@ class EntityTemplateBuilder {
 		/**
 		 * The types marked as optional that don't yet have a default value.
 		 */
-		final optionalValuesRemaining : Array<ComplexType> = [];
+		final optionalValuesRemaining : Map<Int, ComplexType> = new Map();
 
 		/**
 		 * Adds the given value to `parameters` and `arguments` unless it's
@@ -278,7 +278,7 @@ class EntityTemplateBuilder {
 				final parameter : FunctionArg = parameters.find( p -> p.storageId == storageId );
 				if ( parameter != null ) {
 					if ( parameter.opt ) {
-						optionalValuesRemaining[storageId] = null;
+						optionalValuesRemaining.remove( storageId );
 					} else {
 						Context.fatalError( 'Components listed in `$ARGUMENTS_TAG` can\'t have default values. '
 							+ 'Consider adding this to `$OPTIONAL_ARGUMENTS_TAG` instead.', field.pos );
@@ -317,11 +317,11 @@ class EntityTemplateBuilder {
 			} );
 		}
 
-		if ( !( optionalValuesRemaining.count( ( ele ) -> ele != null ) == 0 ) ) {
+		if ( optionalValuesRemaining.iterator().hasNext() ) {
 			final missing : Array<String> = [];
-			for ( type in optionalValuesRemaining )
-				if ( type != null )
-					missing.push( new Printer().printComplexType( type ) );
+			for ( type in optionalValuesRemaining ) {
+				missing.push( new Printer().printComplexType( type ) );
+			}
 
 			final s : String = missing.length == 1 ? "" : "s";
 
@@ -449,4 +449,13 @@ class EntityTemplateBuilder {
 		return fields;
 	}
 }
+
+private typedef TemplateParent = {
+	complexType : ComplexType,
+	abstractType : AbstractType
+};
+
+private typedef TemplateParameter = FunctionArg & {
+	storageId : Int
+};
 #end

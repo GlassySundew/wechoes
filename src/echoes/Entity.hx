@@ -83,7 +83,7 @@ abstract Entity( Int ) {
 	}
 
 	/**
-	 * Registers this entity so it can be found in views and updated by systems.
+	 * Registers this entity so it can be found in queries and updated by systems.
 	 */
 	public function activate( world : World ) : Void {
 		if ( !isActive( world ) ) {
@@ -91,8 +91,8 @@ abstract Entity( Int ) {
 			world._activeEntities.push( cast this );
 
 			for ( storage in getComponents( world ) ) {
-				for ( view in storage.relatedViews ) {
-					view.add( cast this );
+				for ( query in storage.relatedQueries ) {
+					query.add( cast this );
 				}
 			}
 		}
@@ -144,7 +144,7 @@ abstract Entity( Int ) {
 	}
 
 	/**
-	 * Removes this entity from all views and systems, but saves all associated
+	 * Removes this entity from all queries and systems, but saves all associated
 	 * components. Call `activate()` to restore it.
 	 * 
 	 * Note: this will trigger `@:remove` events for all of the entity's
@@ -177,8 +177,8 @@ abstract Entity( Int ) {
 			}
 
 			for ( storage in getComponents( world ) ) {
-				for ( view in storage.relatedViews ) {
-					view.remove( cast this );
+				for ( query in storage.relatedQueries ) {
+					query.remove( cast this );
 				}
 			}
 		}

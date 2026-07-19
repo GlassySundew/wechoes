@@ -4,6 +4,8 @@ package echoes.macro;
 import haxe.macro.Expr;
 import haxe.macro.Printer;
 import haxe.macro.Type;
+import echoes.macro.internal.generic.GenericImportCache;
+import echoes.macro.internal.generic.GenericImportCache.GenericImports;
 
 using echoes.macro.MacroTools;
 using haxe.macro.ComplexTypeTools;
@@ -30,8 +32,6 @@ using haxe.macro.ExprTools;
  * ```
  */
 class TypeSubstitutions {
-
-	private static final cache : Map<String, CachedImports> = new Map();
 
 	/**
 	 * Replaces any null entries in `args` with their defaults, modifying
@@ -67,9 +67,8 @@ class TypeSubstitutions {
 		}
 	}
 
-	public static inline function getCachedImports( classType : ClassType ) : CachedImports {
-		final qualifiedClassName : String = classType.pack.join( "." ) + "." + classType.name;
-		return cache[qualifiedClassName];
+	public static inline function getCachedImports( classType : ClassType ) : GenericImports {
+		return GenericImportCache.get( classType );
 	}
 
 	/**
@@ -77,8 +76,6 @@ class TypeSubstitutions {
 	 * the user types `ClassName.T` instead of just `T`.
 	 */
 	public final className : String;
-
-	private final classType : ClassType;
 
 	/**
 	 * Maps type parameter names onto the user's specified types. For
@@ -94,7 +91,6 @@ class TypeSubstitutions {
 	 */
 	public inline function new( classType : ClassType, ?types : Array<Type> ) {
 		className = classType.name;
-		this.classType = classType;
 
 		final params : Array<TypeParameter> = classType.params;
 
@@ -127,24 +123,12 @@ class TypeSubstitutions {
 
 		// Local imports and usings become inaccessible during a generic build,
 		// so save them for future reference.
-		final qualifiedClassName : String = classType.pack.join( "." ) + "." + className;
-		if ( !cache.exists( qualifiedClassName ) && Context.getLocalModule() == classType.module ) {
-			cache[qualifiedClassName] = {
-				imports : Context.getLocalImports(),
-				usings : [for ( u in Context.getLocalUsing() ) if ( u != null ) {
-					final usingType : ClassType = u.get();
-					final parts : Array<String> = usingType.module.split( "." );
-					if ( parts[parts.length - 1] != usingType.name ) {
-						parts.push( usingType.name );
-					}
-					parts.makeTypePath();
-				}]
-			};
-		}
+		GenericImportCache.capture( classType );
 
 		// Substitute imported types as well, or Haxe probably won't find them.
-		if ( cache.exists( qualifiedClassName ) ) {
-			for ( i in cache.get( qualifiedClassName ).imports ) {
+		final cachedImports = GenericImportCache.get( classType );
+		if ( cachedImports != null ) {
+			for ( i in cachedImports.imports ) {
 				switch ( i.mode ) {
 					case INormal:
 						addSubstitution( i.path[i.path.length - 1].name,
@@ -156,7 +140,7 @@ class TypeSubstitutions {
 				}
 			}
 
-			for ( u in cache.get( qualifiedClassName ).usings ) {
+			for ( u in cachedImports.usings ) {
 				if ( u.sub != null ) {
 					addSubstitution( u.sub, TPath( u ) );
 				} else {
@@ -366,9 +350,4 @@ class TypeSubstitutions {
 		};
 	}
 }
-
-private typedef CachedImports = {
-	imports : Array<ImportExpr>,
-	usings : Array<TypePath>
-};
 #end

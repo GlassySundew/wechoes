@@ -1,9 +1,9 @@
 package echoes;
 
 import echoes.World.SystemDetails;
-import echoes.macro.ViewBuilder;
+import echoes.macro.QueryBuilder;
 import echoes.utils.Signal;
-import echoes.View;
+import echoes.Query;
 import haxe.macro.Expr;
 import haxe.macro.Context;
 import haxe.rtti.Meta;
@@ -306,16 +306,27 @@ class System {
 	}
 
 	/**
-	 * Returns a view that will activate and deactivate when the system does.
+	 * Returns a query that will activate and deactivate when the system does.
 	 */
-	public macro function getLinkedView( self : Expr, componentTypes : ExprOf<Array<Class<Any>>> ) : Expr {
-		final view : Expr = World.getInactiveView( macro world, componentTypes );
+	public macro function getLinkedQuery( self : Expr, componentTypes : Array<ExprOf<Class<Any>>> ) : Expr {
+		return buildLinkedQuery( self, componentTypes );
+	}
+
+	#if macro
+	private static function buildLinkedQuery( self : Expr, componentTypes : Array<ExprOf<Class<Any>>> ) : Expr {
+		final query : Expr = World.getInactiveQuery( macro world, componentTypes );
 		return macro {
 			final self = $self;
-			self.onActivate.push( $view.activate );
-			self.onDeactivate.push( $view.deactivate );
-			$view;
+			self.onActivateSignal.add( $query.activate );
+			self.onDeactivateSignal.add( $query.deactivate );
+			$query;
 		};
+	}
+	#end
+
+	@:deprecated( "Use getLinkedQuery() instead." )
+	public macro function getLinkedView( self : Expr, componentTypes : Array<ExprOf<Class<Any>>> ) : Expr {
+		return buildLinkedQuery( self, componentTypes );
 	}
 
 	public function toString() : String {
