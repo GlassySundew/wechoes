@@ -73,6 +73,8 @@ using echoes.macro.MacroTools;
 @:autoBuild( echoes.macro.SystemBuilder.build() )
 #end
 class System {
+	/** Access contract consumed by a future concurrent scheduler. */
+	public final access : SystemAccess = new SystemAccess();
 
 	#if echoes_profiling
 	@:noCompletion private var __updateTime__ : Int = 0;
@@ -310,6 +312,20 @@ class System {
 	 */
 	public macro function getLinkedQuery( self : Expr, componentTypes : Array<ExprOf<Class<Any>>> ) : Expr {
 		return buildLinkedQuery( self, componentTypes );
+	}
+
+	/**
+	 * Generated conservatively: fetched components are considered writable,
+	 * while exclusion-only components are read for structural filtering.
+	 */
+	@:noCompletion
+	private function __registerQueryAccess__( query : QueryBase ) : Void {
+		for ( storage in query.componentStorages ) access.addWrite( storage.storageId );
+		for ( storage in query.excludeComponentStorage ) access.addRead( storage.storageId );
+	}
+
+	public inline function canRunConcurrentlyWith( other : System ) : Bool {
+		return !access.conflictsWith( other.access );
 	}
 
 	#if macro

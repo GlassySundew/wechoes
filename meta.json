@@ -69,6 +69,12 @@
 		"links": ["./README.md#entity-templates", "./README.md#type-check-syntax"]
 	},
 	{
+		"metadata": ":echoes_sparse_set",
+		"doc": "Stores this component in a sparse set instead of an archetype table. Prefer this for components added and removed frequently.",
+		"targets": ["TAbstract", "TClass", "TEnum", "TTypedef"],
+		"links": ["./README.md#storage-architecture"]
+	},
+	{
 		"metadata": ":echoes_storage",
 		"doc": "Sets the ComponentStorage instance used to store components of this type.",
 		"params": ["Constructor call or singleton instance"],

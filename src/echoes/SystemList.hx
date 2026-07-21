@@ -179,6 +179,25 @@ class SystemList extends System {
 		return systems.keyValueIterator();
 	}
 
+	/**
+	 * Produces conservative non-conflicting batches for scheduler development.
+	 * The current update loop intentionally remains sequential.
+	 */
+	public function buildConcurrentBatches() : Array<Array<System>> {
+		final batches : Array<Array<System>> = [];
+		for ( system in systems ) {
+			var placed = false;
+			for ( batch in batches ) {
+				if ( !placed && !Lambda.exists( batch, other -> !system.canRunConcurrentlyWith( other ) ) ) {
+					batch.push( system );
+					placed = true;
+				}
+			}
+			if ( !placed ) batches.push( [system] );
+		}
+		return batches;
+	}
+
 	public function remove( system : System ) : SystemList {
 		if ( systems.remove( system ) ) {
 			system.__deactivate__();

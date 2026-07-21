@@ -576,6 +576,40 @@ Additional notes:
 - If a component lacks an initial value and isn't listed in `@:arguments`, it will default to null.
 - You may not declare a constructor, but if you declare an `onApplyTemplate()` function, it will run when the template is constructed or applied.
 
+### Storage architecture
+
+Echoes groups entities with the same complete set of component types into an
+**archetype**. Dense component values are stored in column-oriented **tables**.
+Queries cache matching archetypes rather than maintaining a second entity list
+for every structural change; `Query.entities` is a current snapshot assembled
+from those archetypes.
+
+Archetypes and tables are intentionally separate. A component that is added or
+removed frequently can opt into sparse-set storage:
+
+```haxe
+@:echoes_sparse_set
+class Selected {
+	public function new() {}
+}
+```
+
+Adding or removing `Selected` changes the entity's archetype, but leaves its
+table-stored component row in place. Components use table storage by default,
+which favors dense system iteration. Sparse-set storage favors structural
+insertion and removal.
+
+Systems expose a conservative `SystemAccess` descriptor containing component
+read/write sets. The current `SystemList` remains sequential, and immediate
+entity structural changes are treated as a scheduling barrier. This metadata,
+plus `SystemList.buildConcurrentBatches()`, establishes the contract for a
+future command-buffer and concurrent scheduler without claiming that current
+systems are thread-safe.
+
+Lifecycle `@:add` and `@:remove` listeners remain synchronous compatibility
+observers. They are driven by archetype transitions and no longer require
+queries to synchronize their own entity arrays.
+
 ### Compiler flags
 Echoes offers a few ways to customize compilation.
 

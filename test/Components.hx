@@ -2,6 +2,12 @@ package;
 
 import echoes.Entity;
 
+@:echoes_sparse_set
+class VolatileMarker {
+	public final value : Int;
+	public inline function new( value : Int ) this.value = value;
+}
+
 abstract Color(Int) from Int to Int {
 	public static inline function fromRGB(r:Int, g:Int, b:Int):Color {
 		return r << 16 | g << 8 | b;

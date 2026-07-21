@@ -72,6 +72,7 @@ abstract Entity( Int ) {
 		final id : Null<Int> = world.entityIdPool.pop();
 
 		this = id != null ? id : world.nextEntityId++;
+		world.registerEntity( cast this );
 
 		if ( active ) {
 			world.activeEntityIndices[this] = world._activeEntities.length;
@@ -90,11 +91,8 @@ abstract Entity( Int ) {
 			world.activeEntityIndices[this] = world._activeEntities.length;
 			world._activeEntities.push( cast this );
 
-			for ( storage in getComponents( world ) ) {
-				for ( query in storage.relatedQueries ) {
-					query.add( cast this );
-				}
-			}
+			for ( query in world.activeQueries ) query.onEntityActiveChange( cast this, true );
+			world.structureVersion++;
 		}
 	}
 
@@ -176,11 +174,8 @@ abstract Entity( Int ) {
 				#end
 			}
 
-			for ( storage in getComponents( world ) ) {
-				for ( query in storage.relatedQueries ) {
-					query.remove( cast this );
-				}
-			}
+			for ( query in world.activeQueries ) query.onEntityActiveChange( cast this, false );
+			world.structureVersion++;
 		}
 	}
 
@@ -206,6 +201,7 @@ abstract Entity( Int ) {
 		if ( !isDestroyed( world ) ) {
 			removeAll( world );
 			deactivate( world );
+			world.releaseEntity( cast this );
 			world.entityIdPool.push( this );
 			world.entityGens[this]++;
 		}

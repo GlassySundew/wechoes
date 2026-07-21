@@ -21,14 +21,15 @@ class SystemEmitter {
 		addListeners : Array<ListenerSpec>,
 		removeListeners : Array<ListenerSpec>
 	) : Array<Field> {
-		addConstructor( fields, knownPriorities, fixedPriorityListeners );
 		addListenerBridges( fields, linkedQueries, updateListeners, addListeners, removeListeners );
+		addConstructor( fields, linkedQueries, knownPriorities, fixedPriorityListeners );
 		addOptionalFields( fields, nameWithParams );
 		return lifecycleFields( parentTypes, linkedQueries, updateListeners, addListeners, removeListeners ).concat( fields );
 	}
 
 	private static function addConstructor(
 		fields : Array<Field>,
+		linkedQueries : Array<String>,
 		knownPriorities : Map<String, Expr>,
 		fixedPriorityListeners : Map<String, Array<ListenerSpec>>
 	) : Void {
@@ -37,6 +38,9 @@ class SystemEmitter {
 			body.unshift( macro __dt__ = dt );
 			macro __addListenersWithPriority__( ${knownPriorities[priority]}, function ( dt : Float ) $b{body} );
 		}];
+		for ( query in linkedQueries ) {
+			initialization.push( macro __registerQueryAccess__( world.getOrCreateQuery( $i{query} ) ) );
+		}
 		initialization.push( macro if ( parent != null ) {
 			for ( child in __children__ ) {
 				parent.add( child );

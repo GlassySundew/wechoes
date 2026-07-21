@@ -1,380 +1,266 @@
 package echoes;
 
-import echoes.Entity;
-import echoes.Query;
-import echoes.macro.ComponentStorageBuilder;
+import echoes.Query.QueryBase;
 import echoes.utils.ComponentTypes;
 import echoes.utils.ReadOnlyData;
-import haxe.Exception;
 import haxe.Serializer;
 import haxe.Unserializer;
 
 /**
- * A central location to store all components of a given type. For example, the
- * `ComponentStorage<String>` singleton stores every `String` components,
- * indexed by entity ID, and `entity.get(String)` is shorthand for
- * `Echoes.getComponentStorage(String).get(entity)`.
- * 
- * By default, `ComponentStorage` stores data in arrays. Compared to maps, this
- * produces faster lookup times, but may take more memory if you have a large
- * number of entities. In this case, you can try `-D echoes_storage=Map`, though
- * be sure to test the performance impact.
+ * Typed facade over a component's physical storage.
+ *
+ * Table components live in the entity's current `Table`; sparse-set
+ * components live here. The facade preserves the established `get`, `exists`,
+ * `add`, and `remove` API while allowing physical storage to vary by type.
  */
 class ComponentStorage<T> {
-
 	private static final DOT_PATH : EReg = ~/(?:\w+\.)*(\w+)/g;
 
-	/**
-	 * The component's fully-qualified type, in string form. For instance,
-	 * `Echoes.getComponentStorage(Bool).componentType` is `"StdTypes.Bool"`.
-	 */
 	public final componentType : String;
+	@:allow( echoes.World )
+	public var storageId( default, null ) : Int;
+	public final storageKind : StorageKind;
+	private final world : World;
 
 	public var name( get, never ) : String;
-	private inline function get_name() : String {
-		return 'ComponentStorage<$componentType>';
-	}
+	private inline function get_name() : String return 'ComponentStorage<$componentType>';
 
-	/**
-	 * Entity IDs for which this component is currently being removed. During
-	 * this time, the component cannot be re-added.
-	 */
-	private final ongoingRemovals : Array<Int> = [];
+	public var shortComponentType( get, never ) : String;
+	private inline function get_shortComponentType() : String return DOT_PATH.replace( componentType, "$1" );
 
-	/**
-	 * All queries that include this type of component.
-	 */
+	/** Queries structurally mentioning this component. Kept for transition observers. */
 	public var relatedQueries( get, never ) : ReadOnlyArray<QueryBase>;
-	private inline function get_relatedQueries() : ReadOnlyArray<QueryBase> {
-		return _relatedQueries;
-	}
+	private inline function get_relatedQueries() : ReadOnlyArray<QueryBase> return _relatedQueries;
 
 	@:deprecated( "Use relatedQueries instead." )
 	public var relatedViews( get, never ) : ReadOnlyArray<QueryBase>;
-	private inline function get_relatedViews() : ReadOnlyArray<QueryBase> {
-		return relatedQueries;
-	}
+	private inline function get_relatedViews() : ReadOnlyArray<QueryBase> return relatedQueries;
 
 	@:allow( echoes.DynamicComponentStorage )
 	private final _relatedQueries : Array<QueryBase> = [];
 
-	/**
-	 * As `componentType`, except without package information. This is easier to
-	 * read but may not be unique.
-	 */
-	public var shortComponentType( get, never ) : String;
-	private inline function get_shortComponentType() : String {
-		return DOT_PATH.replace( componentType, "$1" );
-	}
+	// Used only for StorageKind.SparseSet.
+	private final sparse : Array<Null<Int>> = [];
+	private final denseEntities : Array<Entity> = [];
+	private final denseValues : Array<T> = [];
+	private final ongoingRemovals : Array<Int> = [];
 
-	/**
-	 * All components of this type.
-	 */
-	@:allow( echoes.World )
-	#if( echoes_storage == "Map" )
-	private final storage : Map<Int, T> = new Map();
-	#else
-	private final storage : Array<Null<T>> = [];
-	#end
-	public inline function new( world : World, componentType : String, ?storageId : Int ) {
+	public function new(
+		world : World,
+		componentType : String,
+		?storageId : Int,
+		?storageKind : StorageKind = StorageKind.Table
+	) {
+		this.world = world;
 		this.componentType = componentType;
-		if ( storageId == null )
-			storageId = echoes.macro.ComponentStorageBuilder.reserveStorageId( componentType );
-		world.addStorage( storageId, this );
-
-		// Some platforms get confused by the declaration of `Array<Null<T>>`,
-		// and treat that as something like `Array<Dynamic>`, and then cast to
-		// int, converting null to 0.
-
-		// So far, this has only been seen in C++, and can be fixed by inserting
-		// a null value anywhere in the array.
-		#if( cpp && ( echoes_storage != "Map" ) )
-		storage[0] = null;
-		#end
+		this.storageId = storageId == null
+			? echoes.macro.ComponentStorageBuilder.reserveStorageId( componentType )
+			: storageId;
+		this.storageKind = storageKind;
+		world.addStorage( this.storageId, this );
 	}
 
-	public function add( entity : Entity, component : Null<T>, world : World ) : Void {
+	public function add( entity : Entity, component : Null<T>, ?targetWorld : World ) : Void {
+		final world = targetWorld == null ? this.world : targetWorld;
 		if ( component == null ) {
 			remove( entity, world );
 			return;
 		}
+		if ( ongoingRemovals.contains( entity.id ) ) {
+			throw 'Attempted to add $componentType to entity ${entity.id} while that component is being removed.';
+		}
 
-		if ( get( entity ) == component ) {
+		if ( exists( entity ) ) {
+			if ( get( entity ) != component ) {
+				final oldValue = get( entity );
+				if ( storageKind == StorageKind.Table ) {
+					world.setTableComponent( entity, storageId, component );
+				} else {
+					denseValues[sparse[entity.id]] = component;
+				}
+				world.notifyComponentValueChanged( entity, cast this, oldValue, true );
+			}
 			return;
 		}
 
-		if ( ongoingRemovals.contains( entity.id ) ) {
-			throw 'Attempted to add $componentType to entity ${entity.id} during a @:remove listener for that component.';
-		}
-
-		storage[entity.id] = component;
-
-		var components : EntityComponents = world.components[entity.id];
-		if ( components == null ) {
-			world.components[entity.id] = components = new EntityComponents();
-		}
-		components.addComponentStorage( this );
-
-		if ( entity.isActive( world ) ) {
-			var exception : Exception = null;
-			for ( query in relatedQueries ) {
-				try {
-					query.add( entity );
-				} catch( e : Exception ) {
-					if ( exception == null ) {
-						exception = e;
-					}
-				}
-
-				// Stop dispatching events if a listener removed it.
-				if ( !exists( entity ) ) {
-					break;
-				}
-			}
-
-			if ( exception != null ) {
-				throw exception;
-			}
-		}
-	}
-
-	@:allow( echoes.World )
-	private inline function clear() : Void {
-		#if( echoes_storage == "Map" )
-		storage.clear();
-		#else
-		#if( eval && !haxe5 )
-		// Work around a bug in the eval target.
-		for ( i in 0...storage.length ) {
-			storage[i] = null;
-		}
-		#end
-		storage.resize( 0 );
-		#end
-
-		ongoingRemovals.resize( 0 );
+		world.addComponent( entity, cast this, component );
 	}
 
 	public inline function exists( entity : Entity ) : Bool {
-		#if( echoes_storage == "Map" )
-		return storage.exists( entity.id );
-		#else
-		return storage[entity.id] != null;
-		#end
+		if ( storageKind == StorageKind.SparseSet ) {
+			final index = sparse[entity.id];
+			return index != null && index >= 0 && index < denseEntities.length && denseEntities[index].id == entity.id;
+		}
+		return world.entityHasComponent( entity, storageId );
 	}
 
 	public inline function get( entity : Entity ) : Null<T> {
-		return storage[entity.id];
+		if ( storageKind == StorageKind.SparseSet ) {
+			final index = sparse[entity.id];
+			return index == null ? null : denseValues[index];
+		}
+		return cast world.getTableComponent( entity, storageId );
 	}
 
-	public function remove( entity : Entity, world : World ) : Void {
-		final removedComponent : Null<T> = get( entity );
+	/** Fast query fetch that bypasses the entity-location indirection for tables. */
+	public inline function getAt( entity : Entity, tableId : Int, tableRow : Int ) : Null<T> {
+		if ( storageKind == StorageKind.SparseSet ) return get( entity );
+		return cast world.tables[tableId].get( storageId, tableRow );
+	}
 
-		#if( echoes_storage == "Map" )
-		storage.remove( entity.id );
-		#else
-		storage[entity.id] = null;
-		#end
-
-		if ( removedComponent != null ) {
-			world.components[entity.id].removeComponentStorage( this );
-
-			if ( entity.isActive( world ) ) {
-				ongoingRemovals.push( entity.id );
-
-				var exception : Exception = null;
-				for ( query in relatedQueries ) {
-					try {
-						query.remove( entity, this, removedComponent );
-					} catch( e : Exception ) {
-						if ( exception == null ) {
-							exception = e;
-						}
-					}
-				}
-
+	public function remove( entity : Entity, ?targetWorld : World ) : Void {
+		final world = targetWorld == null ? this.world : targetWorld;
+		if ( exists( entity ) ) {
+			ongoingRemovals.push( entity.id );
+			try {
+				world.removeComponent( entity, cast this );
+			} catch ( error : Dynamic ) {
 				ongoingRemovals.remove( entity.id );
-
-				if ( exception != null ) {
-					throw exception;
-				}
+				throw error;
 			}
+			ongoingRemovals.remove( entity.id );
 		}
 	}
 
-	/**
-	 * Removes all components of this type from all entities.
-	 */
-	public inline function removeAll( world : World ) : Void {
-		for ( entity => component in storage ) {
-			if ( component != null ) {
-				remove( cast entity, world );
-			}
+	public function removeAll( ?targetWorld : World ) : Void {
+		final world = targetWorld == null ? this.world : targetWorld;
+		final entities = entitiesSnapshot();
+		for ( entity in entities ) remove( entity, world );
+	}
+
+	/** Replacing data does not cause a structural move when the type is present. */
+	public function replace( entity : Entity, component : Null<T>, ?targetWorld : World ) : Void {
+		final world = targetWorld == null ? this.world : targetWorld;
+		if ( component != null && exists( entity ) && get( entity ) != component ) {
+			world.notifyComponentValueChanged( entity, cast this, get( entity ), false );
 		}
+		add( entity, component, world );
 	}
 
-	/**
-	 * Dispatches a `@:remove` event (if applicable) before adding `component`.
-	 * To use this for a given component, tag the type with `@:echoes_replace`.
-	 */
-	public function replace( entity : Entity, component : Null<T>, world : World ) : Void {
-		if ( get( entity ) != component ) {
-			var exception : Exception = null;
-			try {
-				remove( entity, world );
-			} catch( e : Exception ) {
-				if ( exception == null ) {
-					exception = e;
-				}
-			}
+	public function serialize() : String return Serializer.run( valuesByEntityId() );
 
-			try {
-				add( entity, component, world );
-			} catch( e : Exception ) {
-				if ( exception == null ) {
-					exception = e;
-				}
-			}
-
-			if ( exception != null ) {
-				throw exception;
-			}
-		}
-	}
-
-	/**
-	 * Saves all components of this type to string.
-	 * @see `Echoes.serialize()` to save all components at once.
-	 */
-	public function serialize() : String {
-		return Serializer.run( storage );
-	}
-
-	private inline function toString() : String {
-		return name;
-	}
-
-	/**
-	 * Restores all components of this type from string, overwriting any
-	 * existing components.
-	 * 
-	 * Caution: serializing and unserializing are not well-tested. Use this at
-	 * your own risk, and especially avoid unserializing if the component type
-	 * could have changed. Even a minor change, such as changing `Int` to
-	 * `Float`, can cause errors on some targets.
-	 * @see `Echoes.unserialize()` to restore all components at once.
-	 */
-	public function unserialize( data : String, world : World ) : Void {
+	public function unserialize( data : String, ?targetWorld : World ) : Void {
+		final world = targetWorld == null ? this.world : targetWorld;
 		removeAll( world );
-
 		unserializeFromData( Unserializer.run( data ), world );
 	}
 
 	@:allow( echoes.World )
-	private function unserializeFromData(
-		data : #if( echoes_storage == "Map" ) Map<Int, T> #else Array<Null<T>> #end,
-		world : World
-	) {
-		clear();
-
-		if ( data != null ) {
-			for ( entity => component in data ) {
-				add( cast entity, component, world );
+	private function unserializeFromData( data : Dynamic, world : World ) : Void {
+		if ( data == null ) return;
+		if ( Std.isOfType( data, Array ) ) {
+			final values : Array<Dynamic> = cast data;
+			for ( id in 0...values.length ) if ( values[id] != null ) {
+				world.ensureEntityRegistered( cast id );
+				add( cast id, cast values[id], world );
+			}
+		} else {
+			final values : Map<Int, Dynamic> = cast data;
+			for ( id => value in values ) if ( value != null ) {
+				world.ensureEntityRegistered( cast id );
+				add( cast id, cast value, world );
 			}
 		}
 	}
+
+	@:noCompletion
+	public function insertSparse( entity : Entity, value : Dynamic ) : Void {
+		final row = denseEntities.length;
+		sparse[entity.id] = row;
+		denseEntities.push( entity );
+		denseValues.push( cast value );
+	}
+
+	@:noCompletion
+	public function removeSparse( entity : Entity ) : Dynamic {
+		final row = sparse[entity.id];
+		if ( row == null ) return null;
+		final value : Dynamic = denseValues[row];
+		final last = denseEntities.length - 1;
+		if ( row != last ) {
+			final swapped = denseEntities[last];
+			denseEntities[row] = swapped;
+			denseValues[row] = denseValues[last];
+			sparse[swapped.id] = row;
+		}
+		denseEntities.pop();
+		denseValues.pop();
+		sparse[entity.id] = null;
+		return value;
+	}
+
+	@:allow( echoes.World )
+	private function clear() : Void {
+		sparse.resize( 0 );
+		denseEntities.resize( 0 );
+		denseValues.resize( 0 );
+		ongoingRemovals.resize( 0 );
+	}
+
+	@:allow( echoes.World )
+	private function valuesByEntityId() : Array<Dynamic> {
+		final result : Array<Dynamic> = [];
+		for ( entity in entitiesSnapshot() ) result[entity.id] = get( entity );
+		return result;
+	}
+
+	private function entitiesSnapshot() : Array<Entity> {
+		if ( storageKind == StorageKind.SparseSet ) return denseEntities.copy();
+		final result : Array<Entity> = [];
+		for ( entity in world.allEntities() ) if ( entityHasThisComponent( entity ) ) result.push( entity );
+		return result;
+	}
+
+	private inline function entityHasThisComponent( entity : Entity ) : Bool return world.entityHasComponent( entity, storageId );
+
+	private inline function toString() : String return name;
 }
 
-/**
- * A version of `ComponentStorage` that stores components of unknown type.
- * `add()` is disabled because there's no way to make sure the added component
- * is the correct type. `remove()` is still available because it doesn't need to
- * check any types.
- * 
- * If you're creating the `ComponentStorage` at runtime and want to be able to
- * add components, use `new ComponentStorage<Dynamic>()` instead. Obviously, no
- * type checking will be performed.
- */
-@:forward( clear, componentType, exists, get, name, relatedQueries, relatedViews, remove, removeAll, shortComponentType, add )
+@:forward( componentType, storageId, storageKind, exists, get, getAt, name, relatedQueries, relatedViews, remove, removeAll, shortComponentType, add )
 abstract DynamicComponentStorage( ComponentStorage<Dynamic> ) to ComponentStorage<Any> {
-
-	@:from private static inline function fromComponentStorage<T>( componentStorage : ComponentStorage<T> ) : DynamicComponentStorage {
-		return cast componentStorage;
-	}
+	@:from private static inline function fromComponentStorage<T>( componentStorage : ComponentStorage<T> ) : DynamicComponentStorage return cast componentStorage;
 
 	@:allow( echoes.QueryBase )
 	private var _relatedQueries( get, never ) : Array<QueryBase>;
-	private inline function get__relatedQueries() : Array<QueryBase> {
-		return this._relatedQueries;
-	}
+	private inline function get__relatedQueries() : Array<QueryBase> return this._relatedQueries;
+
+	@:allow( echoes.World )
+	private inline function insertSparse( entity : Entity, value : Dynamic ) : Void this.insertSparse( entity, value );
+	@:allow( echoes.World )
+	private inline function removeSparse( entity : Entity ) : Dynamic return this.removeSparse( entity );
 }
 
-/**
- * The components currently attached to an entity. This isn't a good way to look
- * up an individual component, but it helps with batch operations such as
- * `deactivate()` and `destroy()`.
- */
+/** Component types currently attached to an entity. */
 @:forward( contains, containsComponentStorage, iterator, length ) @:forward.new
 @:allow( echoes.ComponentStorage )
 abstract EntityComponents( ComponentTypes ) from ComponentTypes {
-
-	/**
-	 * The source data for all `EntityComponents` lists. This should only be
-	 * updated by `ComponentStorage`, or by `Echoes.reset()`.
-	 */
 	@:allow( echoes.World )
-	// private static final components:Array<EntityComponents> = [];
-	private inline function addComponentStorage( storage : DynamicComponentStorage ) : Void {
-		this.addComponentStorage( storage );
-	}
+	private inline function addComponentStorage( storage : DynamicComponentStorage ) : Void this.addComponentStorage( storage );
 
-	/**
-	 * Gets the `EntityComponents` list for the given entity.
-	 */
 	@:allow( echoes.Entity )
 	private static inline function forEntity( entity : Entity, world : World ) : EntityComponents {
-		if ( world.components[entity.id] == null ) {
-			return world.components[entity.id] = new EntityComponents();
-		} else {
-			return world.components[entity.id];
-		}
+		if ( world.components[entity.id] == null ) world.components[entity.id] = new EntityComponents();
+		return world.components[entity.id];
 	}
 
-	/**
-	 * @see `Entity.removeAll()`
-	 */
 	@:allow( echoes.Entity )
-	private static inline function removeAll( entity : Entity, world : World ) : Void {
-		final entityComponents : EntityComponents = world.components[entity.id];
-		if ( entityComponents != null ) {
-			world.components[entity.id] = new EntityComponents();
-			for ( componentStorage in entityComponents ) {
-				componentStorage.remove( entity, world );
-			}
-		}
+	private static function removeAll( entity : Entity, world : World ) : Void {
+		final entityComponents = world.components[entity.id];
+		if ( entityComponents == null ) return;
+		final snapshot = [for ( storage in entityComponents ) storage];
+		for ( storage in snapshot ) storage.remove( entity, world );
 	}
 
-	private inline function removeComponentStorage( storage : DynamicComponentStorage ) : Bool {
-		return this.removeComponentStorage( storage );
-	}
+	@:allow( echoes.World )
+	private inline function removeComponentStorage( storage : DynamicComponentStorage ) : Bool return this.removeComponentStorage( storage );
 
-	@:to private inline function toIterable() : Iterable<DynamicComponentStorage> {
-		return this;
-	}
+	@:to private inline function toIterable() : Iterable<DynamicComponentStorage> return this;
 
-	/**
-	 * Creates a `Map` of the entity's components, mapping types onto values.
-	 * For instance, if the entity has `Bool` and `String` components, the map
-	 * might be `["StdTypes.Bool" => true, "String" => "Hello World"]`.
-	 */
 	public inline function toMap( world : World ) : Map<String, Dynamic> {
 		final entity : Entity = switch ( world.components.indexOf( cast this ) ) {
-			case -1:
-				throw "This EntityComponents instance was disposed.";
-			case x:
-				cast x;
+			case -1: throw "This EntityComponents instance was disposed.";
+			case x: cast x;
 		};
-
 		return [for ( storage in this ) storage.componentType => storage.get( entity )];
 	}
 }

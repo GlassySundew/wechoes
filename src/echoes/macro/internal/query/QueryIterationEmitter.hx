@@ -27,19 +27,30 @@ class QueryIterationEmitter {
 					if ( !argument.opt && argument.value == null ) {
 						requiredComponents.push( component );
 					}
-					macro ${ComponentStorageBuilder.getComponentStorage( world, component )}.get( entity );
+					macro ${ComponentStorageBuilder.getComponentStorage( world, component )}.getAt(
+						entity,
+						archetype.tableId,
+						archetypeEntity.tableRow
+					);
 			}
 		}];
 
 		final queryName = QueryNaming.getName( requiredComponents, excludedComponents );
 		return macro {
-			var i : Int = 0;
-			final entities : haxe.ds.ReadOnlyArray<echoes.Entity> = $world.getOrCreateQuery( $i{queryName} ).entities;
-			while ( i < entities.length ) {
-				final entity : echoes.Entity = entities[i];
-				$listener( $a{callArguments} );
-				if ( entity == entities[i] || entities.contains( entity ) ) {
-					i++;
+			final query = $world.getOrCreateQuery( $i{queryName} );
+			final processed : Array<Bool> = [];
+			for ( archetype in query.archetypes ) {
+				var i : Int = 0;
+				while ( i < archetype.entities.length ) {
+					final archetypeEntity = archetype.entities[i];
+					final entity : echoes.Entity = archetypeEntity.entity;
+					if ( processed[entity.id] == true || !entity.isActive( $world ) ) {
+						i++;
+						continue;
+					}
+					processed[entity.id] = true;
+					$listener( $a{callArguments} );
+					if ( i < archetype.entities.length && archetype.entities[i] == archetypeEntity ) i++;
 				}
 			}
 		};

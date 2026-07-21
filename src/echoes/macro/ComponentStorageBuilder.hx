@@ -40,14 +40,19 @@ class ComponentStorageBuilder {
 		var componentComplexType = componentComplexType.followComplexType();
 		final componentTypeName : String = new Printer().printComplexType( componentComplexType );
 
+		final componentBaseType : BaseType = componentComplexType.toType().toBaseType();
+		final meta : MetaAccess = componentBaseType != null ? componentBaseType.meta : null;
+		final storageKind = meta != null && meta.has( ":echoes_sparse_set" )
+			? macro echoes.StorageKind.SparseSet
+			: macro echoes.StorageKind.Table;
+
 		var createStorage : Expr = macro new echoes.ComponentStorage<$componentComplexType>(
 			world,
 			$v{componentTypeName},
-			$v{storageId}
+			$v{storageId},
+			$storageKind
 		);
 
-		final componentBaseType : BaseType = componentComplexType.toType().toBaseType();
-		final meta : MetaAccess = componentBaseType != null ? componentBaseType.meta : null;
 		if ( meta != null ) {
 			switch ( meta.extract( ":echoes_storage" ) ) {
 				case null, []:

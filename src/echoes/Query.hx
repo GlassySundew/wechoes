@@ -1,7 +1,6 @@
 package echoes;
 
-import echoes.ComponentStorage;
-import echoes.Entity;
+import echoes.ComponentStorage.DynamicComponentStorage;
 import echoes.utils.ReadOnlyData;
 import echoes.utils.Signal;
 import haxe.Exception;
@@ -11,31 +10,41 @@ import haxe.Exception;
 #end
 abstract class Query<Rest> extends QueryBase {}
 
+/**
+ * A structural query caches matching archetypes, not individual entities.
+ * Entity lists are snapshots assembled on demand for API compatibility.
+ */
 abstract class QueryBase {
-
 	private var activations : Int = 0;
 	public var active( get, never ) : Bool;
 	private inline function get_active() : Bool return activations > 0;
 
-	/**
-	 * All `ComponentStorage` instances related to this query.
-	 */
 	public final componentStorages : ReadOnlyArray<DynamicComponentStorage>;
 	public final excludeComponentStorage : ReadOnlyArray<DynamicComponentStorage>;
+	public final requiredComponentIds : ReadOnlyArray<Int>;
+	public final excludedComponentIds : ReadOnlyArray<Int>;
 
-	@:allow( echoes.World )
-	@:allow( echoes.ComponentStorage )
+	private final matchingArchetypes : Array<Archetype> = [];
+	public var archetypes( get, never ) : ReadOnlyArray<Archetype>;
+	private inline function get_archetypes() : ReadOnlyArray<Archetype> return matchingArchetypes;
 	private final _entities : Array<Entity> = [];
 
-	/**
-	 * All entities in this query.
-	 */
 	public var entities( get, never ) : ReadOnlyArray<Entity>;
-	private inline function get_entities() : ReadOnlyArray<Entity> return _entities;
+	private function get_entities() : ReadOnlyArray<Entity> {
+		_entities.resize( 0 );
+		if ( active ) {
+			for ( archetype in matchingArchetypes ) {
+				for ( row in archetype.entities ) {
+					if ( row.entity.isActive( world ) ) _entities.push( row.entity );
+				}
+			}
+		}
+		return _entities;
+	}
 
 	final world : World;
 
-	public inline function new(
+	public function new(
 		world : World,
 		componentStorages : Array<DynamicComponentStorage>,
 		?excludeComponentStorage : Array<DynamicComponentStorage>
@@ -43,134 +52,95 @@ abstract class QueryBase {
 		this.world = world;
 		this.componentStorages = componentStorages;
 		this.excludeComponentStorage = excludeComponentStorage ?? [];
+		this.requiredComponentIds = [for ( storage in componentStorages ) storage.storageId];
+		this.excludedComponentIds = [for ( storage in this.excludeComponentStorage ) storage.storageId];
 	}
 
 	public function activate() : Void {
 		activations++;
-		if ( activations == 1 ) {
-			world._activeQueries.push( this );
-			for ( e in world.activeEntities ) {
-				add( e );
-			}
-			for ( storage in componentStorages ) {
-				storage._relatedQueries.push( this );
-			}
-			for ( storage in this.excludeComponentStorage ) {
-				storage._relatedQueries.push( this );
-			}
+		if ( activations != 1 ) return;
+		world._activeQueries.push( this );
+		for ( storage in componentStorages ) if ( !storage._relatedQueries.contains( this ) ) storage._relatedQueries.push( this );
+		for ( storage in excludeComponentStorage ) if ( !storage._relatedQueries.contains( this ) ) storage._relatedQueries.push( this );
+		matchingArchetypes.resize( 0 );
+		for ( archetype in world.archetypes ) considerArchetype( archetype );
+	}
+
+	@:allow( echoes.World )
+	private function considerArchetype( archetype : Archetype ) : Void {
+		if ( archetype.matches( requiredComponentIds, excludedComponentIds ) && !matchingArchetypes.contains( archetype ) ) {
+			matchingArchetypes.push( archetype );
 		}
 	}
 
-	@:allow( echoes.Entity ) @:allow( echoes.ComponentStorage )
-	private inline function add( entity : Entity ) : Void {
-		var filterFullfilled : Bool = true;
-		for ( storage in excludeComponentStorage ) {
-			if ( storage.exists( entity ) ) {
-				filterFullfilled = false;
+	@:allow( echoes.World )
+	private function onEntityTransition(
+		entity : Entity,
+		from : Archetype,
+		to : Archetype,
+		?removedComponentStorage : DynamicComponentStorage,
+		?removedComponent : Any
+	) : Void {
+		if ( !active ) return;
+		final matchedBefore = from.matches( requiredComponentIds, excludedComponentIds );
+		final matchesNow = to.matches( requiredComponentIds, excludedComponentIds );
+		if ( !matchedBefore && matchesNow ) {
+			final current = world.getEntityLocation( entity );
+			if ( current != null && world.archetypes[current.archetypeId].matches( requiredComponentIds, excludedComponentIds ) ) {
+				dispatchAddedCallback( entity );
 			}
+		} else if ( matchedBefore && !matchesNow ) {
+			dispatchRemovedCallback( entity, removedComponentStorage, removedComponent );
 		}
-		if ( filterFullfilled ) {
-			for ( storage in componentStorages ) {
-				if ( !storage.exists( entity ) ) {
-					filterFullfilled = false;
-					break;
-				}
-			}
-		}
+	}
 
-		if ( filterFullfilled ) {
+	@:allow( echoes.Entity )
+	private function onEntityActiveChange( entity : Entity, becameActive : Bool ) : Void {
+		if ( !active ) return;
+		final location = world.getEntityLocation( entity );
+		if ( location == null || !world.archetypes[location.archetypeId].matches( requiredComponentIds, excludedComponentIds ) ) return;
+		if ( becameActive ) dispatchAddedCallback( entity ) else dispatchRemovedCallback( entity );
+	}
 
-			if ( !entities.contains( entity ) ) {
-				_entities.push( entity );
-			}
-			dispatchAddedCallback( entity );
-		} else if ( entities.contains( entity ) ) {
-
-			remove( entity );
-		}
+	@:allow( echoes.World )
+	private function onComponentValueChanged(
+		entity : Entity,
+		storage : DynamicComponentStorage,
+		oldValue : Dynamic,
+		addedPhase : Bool
+	) : Void {
+		if ( !active ) return;
+		final location = world.getEntityLocation( entity );
+		if ( location == null || !world.archetypes[location.archetypeId].matches( requiredComponentIds, excludedComponentIds ) ) return;
+		if ( addedPhase ) dispatchAddedCallback( entity ) else dispatchRemovedCallback( entity, storage, oldValue );
 	}
 
 	public inline function deactivate() : Void {
 		activations--;
-		if ( activations <= 0 ) {
-			reset();
-		}
+		if ( activations <= 0 ) reset();
 	}
 
 	public function iterUntyped( callback : ( Entity, Any ) -> Void ) : Void {
-		var i : Int = 0;
-		while ( i < entities.length ) {
-			final entity : Entity = entities[i];
-			callback( entity, [for ( storage in componentStorages ) storage.get( entity )] );
-
-			if ( entity != entities[i] && !entities.contains( entity ) ) {
-				// Entity was removed; don't increment.
-			} else {
-				i++;
-			}
-		}
+		final snapshot = [for ( entity in entities ) entity];
+		for ( entity in snapshot ) callback( entity, [for ( storage in componentStorages ) storage.get( entity )] );
 	}
 
-	private function dispatchAddedCallback( entity : Entity ) : Void {
-		// Overridden by `QueryBuilder`.
-	}
+	private function dispatchAddedCallback( entity : Entity ) : Void {}
 
-	private function dispatchRemovedCallback( entity : Entity, ?removedComponentStorage : DynamicComponentStorage, ?removedComponent : Any ) : Void {
-		// Overridden by `QueryBuilder`.
-	}
-
-	@:allow( echoes.Entity ) @:allow( echoes.ComponentStorage )
-	private inline function remove(
+	private function dispatchRemovedCallback(
 		entity : Entity,
 		?removedComponentStorage : DynamicComponentStorage,
 		?removedComponent : Any
-	) : Void {
-
-		// if (
-		// 	removedComponentStorage != null
-		// 	&& excludeComponentStorage.contains( removedComponentStorage ) //
-		// ) {
-
-		// 	dispatchRemovedCallback( entity, removedComponentStorage, removedComponent );
-		// 	return;
-		// }
-
-		// Many applications will have a mix of short-lived and long-lived
-		// entities. An entity being removed is more likely to be short-lived,
-		// meaning it's near the end of the array.
-		final index : Int = entities.lastIndexOf( entity );
-		if ( index >= 0 ) {
-			#if echoes_stable_order
-			_entities.splice( index, 1 );
-			#else
-			_entities[index] = entities[entities.length - 1];
-			_entities.pop();
-			#end
-			dispatchRemovedCallback( entity, removedComponentStorage, removedComponent );
-		} else if ( removedComponentStorage != null ) {
-
-			for ( exclude in excludeComponentStorage ) {
-
-				if ( exclude == removedComponentStorage ) {
-
-					add( entity );
-				}
-			}
-		}
-	}
+	) : Void {}
 
 	@:allow( echoes.World )
 	private function reset() : Void {
 		activations = 0;
 		world._activeQueries.remove( this );
+		matchingArchetypes.resize( 0 );
 		_entities.resize( 0 );
-
-		for ( storage in componentStorages ) {
-			storage._relatedQueries.remove( this );
-		}
-		for ( storage in this.excludeComponentStorage ) {
-			storage._relatedQueries.remove( this );
-		}
+		for ( storage in componentStorages ) storage._relatedQueries.remove( this );
+		for ( storage in excludeComponentStorage ) storage._relatedQueries.remove( this );
 	}
 
 	public inline function toString() : String {
@@ -178,91 +148,38 @@ abstract class QueryBase {
 	}
 }
 
-/**
- * A `Query` that can be created at runtime.
- * 
- * Sample usage:
- * 
- * ```haxe
- * //Storage for a custom component type. Because `entity.add(x)` only works at
- * //compile time, you'll have to call `customComponent.add(entity, x)`.
- * public final customComponent:ComponentStorage<Any>;
- * 
- * //A query of `customComponent` and `String`; it'll dispatch events for any
- * //entity that has both components.
- * public final query:DynamicQuery;
- * 
- * public function new() {
- *     customComponent = new ComponentStorage<Any>("CustomComponent");
- *     
- *     query = new DynamicQuery(customComponent, Echoes.getComponentStorage(String));
- *     
- *     //Important: `DynamicQuery` doesn't activate itself.
- *     query.activate();
- *     
- *     //Add/remove listeners work normally, except the components are untyped.
- *     query.onAdded.add((entity:Entity, components:Array<Any>) -> trace('Entity $entity now has $components'));
- *     query.onRemoved.add((entity:Entity, components:Array<Any>) -> trace('Entity $entity no longer has all of $components'));
- * }
- * 
- * public function update(time:Float):Void {
- *     //Like with any other query, `iter()` doesn't allow for a time argument.
- *     //Here's one way to pass it in, but you could also simply leave it out.
- *     query.iter(updateEntity.bind(time));
- * }
- * 
- * private function updateEntity(time:Float, entity:Entity, components:Array<Any>):Void {
- *     trace('Updating entity $entity that has $components ($time seconds elapsed)')
- * }
- * ```
- */
+/** Runtime-typed structural query. */
 class DynamicQuery extends QueryBase {
+	public final onAdded : Signal<( Entity, Array<Any> ) -> Void> = new Signal();
+	public final onRemoved : Signal<( Entity, Array<Any> ) -> Void> = new Signal();
 
-	public final onAdded : Signal< ( Entity, Array<Any> ) -> Void> = new Signal< ( Entity, Array<Any> ) -> Void>();
-	public final onRemoved : Signal< ( Entity, Array<Any> ) -> Void> = new Signal< ( Entity, Array<Any> ) -> Void>();
-
-	public inline function new(
+	public function new(
 		world : World,
 		componentStorages : Array<DynamicComponentStorage>,
 		?excludeComponentStorages : Array<DynamicComponentStorage>
 	) {
-		// #if debug
-		// echoes.macro.MacroTools.checkWorld(world);
-		// #end
 		super( world, componentStorages, excludeComponentStorages );
 	}
 
 	private override function dispatchAddedCallback( entity : Entity ) : Void {
-		var index : Int = entities.lastIndexOf( entity );
-		for ( callback in onAdded ) {
-			callback( entity, [for ( storage in componentStorages ) storage.get( entity )] );
-
-			// If the callback removed the entity, stop. Cache the index to save
-			// time in most cases. HashLink is known to return 0 when reading out
-			// of bounds, so it has to check length too.
-			if ( #if hl index >= entities.length || #end entities[index] != entity ) {
-				index = entities.lastIndexOf( entity );
-				if ( index < 0 ) {
-					break;
-				}
-			}
-		}
+		for ( callback in onAdded ) callback( entity, [for ( storage in componentStorages ) storage.get( entity )] );
 	}
 
-	private override function dispatchRemovedCallback( entity : Entity, ?removedComponentStorage : DynamicComponentStorage, ?removedComponent : Any ) : Void {
+	private override function dispatchRemovedCallback(
+		entity : Entity,
+		?removedComponentStorage : DynamicComponentStorage,
+		?removedComponent : Any
+	) : Void {
 		var exception : Exception = null;
 		for ( callback in onRemoved ) {
 			try {
 				callback( entity, [for ( storage in componentStorages )
 					storage == removedComponentStorage ? removedComponent : storage.get( entity )] );
-			} catch( e : Exception ) {
-				exception = e;
+			} catch ( e : Exception ) {
+				if ( exception == null ) exception = e;
 			}
 		}
-
-		if ( exception != null ) {
-			throw exception;
-		}
+		if ( exception != null ) throw exception;
 	}
 
 	private override function reset() : Void {
@@ -271,7 +188,5 @@ class DynamicQuery extends QueryBase {
 		onRemoved.clear();
 	}
 
-	public inline function iter( callback : ( Entity, Array<Any> ) -> Void ) : Void {
-		iterUntyped( cast callback );
-	}
+	public inline function iter( callback : ( Entity, Array<Any> ) -> Void ) : Void iterUntyped( cast callback );
 }

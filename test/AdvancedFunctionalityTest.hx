@@ -6,6 +6,7 @@ import echoes.ComponentStorage;
 import echoes.Entity;
 import echoes.System;
 import echoes.SystemList;
+import echoes.StorageKind;
 import echoes.utils.ComponentTypes;
 import echoes.utils.Signal;
 import echoes.Query;
@@ -17,6 +18,38 @@ import utest.Test;
 
 @:depends( BasicFunctionalityTest )
 class AdvancedFunctionalityTest extends Test {
+	private function testArchetypeTableAndSparseSetFoundation() : Void {
+		final world = new World();
+		final entity = new Entity( world );
+		entity.add( world, ( "dense" : Name ) );
+		final denseLocation = world.getEntityLocation( entity );
+		final denseTableId = denseLocation.tableId;
+		final denseTableRow = denseLocation.tableRow;
+		final denseArchetypeId = denseLocation.archetypeId;
+
+		entity.add( world, new VolatileMarker( 7 ) );
+		final sparseLocation = world.getEntityLocation( entity );
+		Assert.equals( StorageKind.SparseSet, world.getComponentStorage( VolatileMarker ).storageKind );
+		Assert.notEquals( denseArchetypeId, sparseLocation.archetypeId );
+		Assert.equals( denseTableId, sparseLocation.tableId );
+		Assert.equals( denseTableRow, sparseLocation.tableRow );
+		Assert.equals( 7, entity.get( world, VolatileMarker ).value );
+		Assert.isTrue( world.getQuery( Name, VolatileMarker ).entities.contains( entity ) );
+
+		entity.remove( world, VolatileMarker );
+		final restoredLocation = world.getEntityLocation( entity );
+		Assert.equals( denseArchetypeId, restoredLocation.archetypeId );
+		Assert.equals( denseTableId, restoredLocation.tableId );
+		Assert.isNull( entity.get( world, VolatileMarker ) );
+	}
+
+	private function testSystemAccessFoundation() : Void {
+		final world = new World();
+		final system = new NameSystem( world );
+		Assert.isTrue( system.access.writes.contains( world.getComponentStorage( Name ).storageId ) );
+		Assert.isTrue( system.access.structuralChanges );
+		Assert.isFalse( system.canRunConcurrentlyWith( new AppearanceSystem( world ) ) );
+	}
 
 	private var count1 : Int = 0;
 
