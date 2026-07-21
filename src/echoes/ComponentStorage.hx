@@ -32,10 +32,6 @@ class ComponentStorage<T> {
 	public var relatedQueries( get, never ) : ReadOnlyArray<QueryBase>;
 	private inline function get_relatedQueries() : ReadOnlyArray<QueryBase> return _relatedQueries;
 
-	@:deprecated( "Use relatedQueries instead." )
-	public var relatedViews( get, never ) : ReadOnlyArray<QueryBase>;
-	private inline function get_relatedViews() : ReadOnlyArray<QueryBase> return relatedQueries;
-
 	@:allow( echoes.DynamicComponentStorage )
 	private final _relatedQueries : Array<QueryBase> = [];
 
@@ -216,7 +212,7 @@ class ComponentStorage<T> {
 	private inline function toString() : String return name;
 }
 
-@:forward( componentType, storageId, storageKind, exists, get, getAt, name, relatedQueries, relatedViews, remove, removeAll, shortComponentType, add )
+@:forward( componentType, storageId, storageKind, exists, get, getAt, name, relatedQueries, remove, removeAll, shortComponentType, add )
 abstract DynamicComponentStorage( ComponentStorage<Dynamic> ) to ComponentStorage<Any> {
 	@:from private static inline function fromComponentStorage<T>( componentStorage : ComponentStorage<T> ) : DynamicComponentStorage return cast componentStorage;
 

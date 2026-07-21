@@ -340,11 +340,6 @@ class System {
 	}
 	#end
 
-	@:deprecated( "Use getLinkedQuery() instead." )
-	public macro function getLinkedView( self : Expr, componentTypes : Array<ExprOf<Class<Any>>> ) : Expr {
-		return buildLinkedQuery( self, componentTypes );
-	}
-
 	public function toString() : String {
 		return Type.getClassName( Type.getClass( this ) );
 	}

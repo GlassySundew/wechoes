@@ -119,8 +119,8 @@ class SystemBuilder {
 
 			final params : Array<Expr> = switch ( expr.expr ) {
 				case ECall(
-					_.expr => EConst( CIdent( "getLinkedQuery" | "getLinkedView" ) )
-						| EField( _, "getLinkedQuery" | "getLinkedView" ),
+					_.expr => EConst( CIdent( "getLinkedQuery" ) )
+						| EField( _, "getLinkedQuery" ),
 					params
 				):
 					params;

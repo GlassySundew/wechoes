@@ -40,10 +40,6 @@ class World {
 	public var activeQueries( get, never ) : ReadOnlyArray<QueryBase>;
 	private inline function get_activeQueries() : ReadOnlyArray<QueryBase> return _activeQueries;
 
-	@:deprecated( "Use activeQueries instead." )
-	public var activeViews( get, never ) : ReadOnlyArray<QueryBase>;
-	private inline function get_activeViews() : ReadOnlyArray<QueryBase> return activeQueries;
-
 	public final activeSystems : SystemList;
 
 	public final updateErrors : Array<SystemExecutionError> = [];
@@ -435,11 +431,6 @@ class World {
 		return cast queryStorage[id];
 	}
 
-	@:deprecated( "Use getOrCreateQuery() instead." )
-	public inline function getOrCreateView<T : QueryBase>( cl : Class<T> ) : T {
-		return getOrCreateQuery( cl );
-	}
-
 	public function addQuery<T : QueryBase>( cl : Class<T>, query : T ) {
 		final id : Int = untyped cl.__global_id__;
 
@@ -447,11 +438,6 @@ class World {
 			trace( 'attaching an already existing query with id ${id}' );
 
 		queryStorage[id] = query;
-	}
-
-	@:deprecated( "Use addQuery() instead." )
-	public inline function addView<T : QueryBase>( cl : Class<T>, query : T ) : Void {
-		addQuery( cl, query );
 	}
 
 	@:allow( echoes.SystemList )
@@ -583,15 +569,6 @@ class World {
 		return macro Std.downcast( $world.getOrCreateQuery( $i{queryName} ), $i{queryName} );
 	}
 
-	@:deprecated( "Use getInactiveQuery() instead." )
-	#if macro static #else macro #end
-	public function getInactiveView(
-		world : ExprOf<World>,
-		componentTypes : Array<ExprOf<Class<Any>>>
-	) : Expr {
-		return World.getInactiveQuery( world, componentTypes );
-	}
-
 	#if macro
 	private static function normalizeQueryArguments( arguments : Array<Expr> ) : {
 		components : Array<Expr>,
@@ -633,14 +610,6 @@ class World {
 		};
 	}
 
-	@:deprecated( "Use getQuery() instead." )
-	#if macro static #else macro #end
-	public function getView(
-		world : ExprOf<World>,
-		componentTypes : Array<ExprOf<Class<Any>>>
-	) : Expr {
-		return World.getQuery( world, componentTypes );
-	}
 }
 
 typedef AppStatistics = {

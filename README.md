@@ -619,20 +619,6 @@ Echoes offers a few ways to customize compilation.
 
 ## Breaking changes
 
-### Query terminology
-
-The former `View` family has been renamed to `Query`, which better describes
-its role as a filtered selection of entities:
-
-- `View`, `ViewBase`, and `DynamicView` are now `Query`, `QueryBase`, and
-  `DynamicQuery`.
-- `getView()`, `getInactiveView()`, and `getLinkedView()` are now `getQuery()`,
-  `getInactiveQuery()`, and `getLinkedQuery()`.
-- `activeViews` and `relatedViews` are now `activeQueries` and
-  `relatedQueries`.
-
-Deprecated compatibility aliases remain available for migration.
-
 ### Since v1.0.0
 
 - Creating a query with two of the same component is now an error.
@@ -642,8 +628,8 @@ Deprecated compatibility aliases remain available for migration.
 - `Echoes.addSystem()`, `Echoes.hasSystem()`, and `Echoes.removeSystem()` have been replaced by `system.activate()`, `system.active`, and `system.deactivate()`, respectively.
 - `Entity.getComponents()` now returns a list of `ComponentStorage` instances, instead of a map. If you prefer the old format, you can perform an implicit cast: `var map:Map<String, Dynamic> = Entity.getComponents()`.
 - Systems no longer receive `@:remove` events when deactivated. For instance, a system removed by `Echoes.removeSystem()` won't receive a bunch of events.
-- `View.entities` is now an `Array` rather than a `List`. You can still iterate over it as before, but you'll have to call `contains()` rather than `has()` if you want to check existence.
-- `Echoes.activeEntities` and `View.entities` may be re-ordered when entities or their components are removed. You can set `-D echoes_stable_order` to preserve the order, potentially at the cost of speed.
+- `Query.entities` is now an `Array` rather than a `List`. You can still iterate over it as before, but you'll have to call `contains()` rather than `has()` if you want to check existence.
+- `Echoes.activeEntities` and `Query.entities` may be re-ordered when entities or their components are removed. You can set `-D echoes_stable_order` to preserve the order, potentially at the cost of speed.
 - `@:remove` listeners are no longer allowed to add back the component that's currently being removed. They may still add other components as normal.
 - `SystemList.exists()` now searches recursively, returning true for grandchildren as well as direct children.
 
@@ -655,8 +641,8 @@ Deprecated compatibility aliases remain available for migration.
 
 ### Since v1.0.0-rc.2
 
-- `Echoes.getSingleton()` is now `Echoes.getView()`, `Echoes.getInactiveView()`, and `Echoes.getComponentStorage()`, all of which take arguments instead of using `getExpectedType()`.
-- `System.makeLinkedView()` is now `System.getLinkedView()`, which takes arguments instead of using `getExpectedType()`.
+- `Echoes.getSingleton()` was replaced by `Echoes.getQuery()`, `Echoes.getInactiveQuery()`, and `Echoes.getComponentStorage()`, all of which take arguments instead of using `getExpectedType()`.
+- Linked query creation uses `System.getLinkedQuery()`, which takes arguments instead of using `getExpectedType()`.
 
 ### Since deepcake/echo
 
@@ -675,7 +661,7 @@ Components:
 
 Systems:
 
-- Systems no longer initialize `View` variables automatically. You must now call `getLinkedView()` for the same behavior.
+- Systems no longer initialize `Query` variables automatically. You must now call `getLinkedQuery()` for the same behavior.
 - `@rm` is no longer a valid way to shorten `@:remove`. You may now omit any number of letters from the end, but not from the middle. (Thus, `@:rem` is now valid.)
 - As far as listener functions are concerned, `Int` no longer means anything special. To get a reference to the entity, take an argument of type `Entity`.
 
@@ -693,15 +679,15 @@ Find | Replace with | Notes
 `echoes.core` | `echoes`
 `Workflow` | `Echoes`
 `Echoes.entities` | `Echoes.activeEntities`
-`Echoes.views` | `Echoes.activeViews`
+`Echoes.queries` | `Echoes.activeQueries`
 `Echoes.systems` | `Echoes.activeSystems`
 `Echoes.addSystem(system)` | `system.activate()` | You might have used a different variable name than `system`.
 `Echoes.removeSystem(system)` | `system.deactivate()` | Ditto.
-`AbstractView` | `ViewBase` | Import `echoes.View`.
+`AbstractQuery` | `QueryBase` | Import `echoes.Query`.
 `ISystem` | `System` | Change "`implements`" to "`extends`," if applicable.
 `ICleanableComponentContainer` | `ComponentStorage`
-`view.size()` | `view.entities.length` | You might have used a different variable name than `view`.
-`view.isActive()` | `view.active` | Ditto.
+`query.size()` | `query.entities.length` | You might have used a different variable name than `query`.
+`query.isActive()` | `query.active` | Ditto.
 `onAdded.add()` | `onAdded.push()`
 `onAdded.size()` | `onAdded.length`
 `onRemoved.add()` | `onRemoved.push()`

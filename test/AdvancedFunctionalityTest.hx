@@ -614,26 +614,6 @@ class AdvancedFunctionalityTest extends Test {
 		Assert.isTrue( signalDispatched );
 	}
 
-	private function testViewCompatibility() : Void {
-		final world = new World();
-		final entity = new Entity( world ).add( world, ( "legacy" : Name ) );
-		final legacyQuery : echoes.View<Name> = world.getView( Name );
-
-		Assert.isTrue( legacyQuery.entities.contains( entity ) );
-		Assert.isTrue( world.activeViews.contains( legacyQuery ) );
-		Assert.isTrue( world.getComponentStorage( Name ).relatedViews.contains( legacyQuery ) );
-
-		final system = new NameSystem( world );
-		final linkedQuery : echoes.View<Color> = system.getLinkedView( Color );
-		Assert.isFalse( linkedQuery.active );
-
-		final legacyDynamic : echoes.View.DynamicView = new echoes.View.DynamicView(
-			world,
-			[world.getComponentStorage( Name )]
-		);
-		legacyDynamic.activate();
-		Assert.isTrue( legacyDynamic.entities.contains( entity ) );
-	}
 }
 
 typedef Alias<T> = T;
